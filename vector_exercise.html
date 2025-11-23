@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Vector Practice</title>
+    <!-- The p5.js library is required for canvas drawing and vector math -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    
+    <!-- CSS styles are embedded directly into the HTML file -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 0;
+        }
+
+        .author {
+            font-size: 1rem;
+            font-weight: normal;
+            color: #555;
+            margin-top: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .app-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 1100px; /* Let cards wrap to 2x2 on wide screens */
+        }
+
+        .exercise-card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .exercise-card h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        .canvas-container {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+            width: 100%; /* Make canvas container responsive */
+            padding-bottom: 100%; /* Maintain 1:1 aspect ratio */
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .canvas-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .feedback {
+            margin-top: 15px;
+            font-weight: bold;
+            min-height: 20px;
+        }
+
+        .vector-a-label { color: #0000FF; font-weight: bold; }
+        .vector-b-label { color: #FF0000; font-weight: bold; }
+        .vector-v-label { color: #8A2BE2; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Interactive Vector Practice 📐</h1>
+    <h2 class="author">Suyong Choi (Korea U.)</h2>
+
+    <div class="app-container">
+        <!-- Exercise 1: Vector Addition -->
+        <div class="exercise-card">
+            <h2>Part 1: Vector Addition</h2>
+            <p>Two vectors, <span class="vector-a-label">A (blue)</span> and <span class="vector-b-label">B (red)</span>, are shown starting from the origin. Click and drag from the origin to draw the resultant vector <strong>R = A + B</strong>. Release the mouse and click "Submit".</p>
+            <div id="canvas-add-container" class="canvas-container"></div>
+            <div class="controls">
+                <button id="submit-addition">Submit Addition</button>
+                <button id="next-addition">Next Problem</button>
+            </div>
+            <p id="feedback-addition" class="feedback"></p>
+        </div>
+
+        <!-- Exercise 2: Vector Subtraction -->
+        <div class="exercise-card">
+            <h2>Part 2: Vector Subtraction</h2>
+            <p>Two vectors, <span class="vector-a-label">A (blue)</span> and <span class="vector-b-label">B (red)</span>, are shown starting from the origin. Click and drag from the origin to draw the resultant vector <strong>R = A - B</strong>. Release the mouse and click "Submit".</p>
+            <div id="canvas-subtract-container" class="canvas-container"></div>
+            <div class="controls">
+                <button id="submit-subtraction">Submit Subtraction</button>
+                <button id="next-subtraction">Next Problem</button>
+            </div>
+            <p id="feedback-subtraction" class="feedback"></p>
+        </div>
+
+        <!-- Exercise 3: Vector Decomposition -->
+        <div class="exercise-card">
+            <h2>Part 3: Vector Decomposition</h2>
+            <p>A vector <span class="vector-v-label">V (purple)</span> is shown. Find its x and y components in <strong>grid units</strong> and enter them below.</p>
+            <div id="canvas-decompose-container" class="canvas-container"></div>
+            <div class="controls">
+                <div class="input-group">
+                    <label for="x-comp">x-component:</label>
+                    <input type="number" id="x-comp" placeholder="e.g., 4">
+                </div>
+                <div class="input-group">
+                    <label for="y-comp">y-component:</label>
+                    <input type="number" id="y-comp" placeholder="e.g., -3">
+                </div>
+                <button id="submit-decomposition">Submit Components</button>
+                <button id="next-decomposition">Next Problem</button>
+            </div>
+            <p id="feedback-decomposition" class="feedback"></p>
+        </div>
+        
+        <!-- Exercise 4: Head-to-Tail Addition -->
+        <div class="exercise-card">
+            <h2>Part 4: Vector Addition (Head-to-Tail)</h2>
+            <p id="instruction-head-to-tail"><strong>Step 1:</strong> Drag the tail of the <span class="vector-b-label">red vector (B)</span> to the head of the <span class="vector-a-label">blue vector (A)</span>.</p>
+            <div id="canvas-head-to-tail-container" class="canvas-container"></div>
+            <div class="controls">
+                <button id="submit-head-to-tail">Submit Resultant</button>
+                <button id="next-head-to-tail">Next Problem</button>
+            </div>
+            <p id="feedback-head-to-tail" class="feedback"></p>
+        </div>
+    </div>
+
+    <!-- The application logic is embedded directly in the HTML file -->
+    <script>
+        // Define grid size as a constant for easy modification
+        const gridSize = 20; 
+
+        /**
+         * Common drawing functions used by all p5.js sketches.
+         */
+        const drawGrid = (p, w, h, origin) => {
+            p.stroke(220);
+            p.strokeWeight(1);
+            for (let x = origin.x % gridSize; x <= w; x += gridSize) { p.line(x, 0, x, h); }
+            for (let y = origin.y % gridSize; y <= h; y += gridSize) { p.line(0, y, w, y); }
+            p.stroke(150);
+            p.strokeWeight(2);
+            p.line(origin.x, 0, origin.x, h);
+            p.line(0, origin.y, w, origin.y);
+        };
+
+        const drawVector = (p, start, vec, color) => {
+            p.push();
+            p.stroke(color);
+            p.fill(color);
+            p.strokeWeight(3);
+            p.translate(start.x, start.y);
+            p.line(0, 0, vec.x, -vec.y);
+            p.translate(vec.x, -vec.y);
+            let angle = p.atan2(-vec.y, vec.x);
+            p.rotate(angle);
+            p.triangle(0, 0, -8, 4, -8, -4);
+            p.pop();
+        };
+
+        /**
+         * Base sketch for Addition and Subtraction
+         */
+        const createOperatorSketch = (config) => (p) => {
+            let vecA, vecB, correctResultant, userResultant = null, origin, showCorrectAnswer = false;
+            const feedbackEl = document.getElementById(config.feedbackEl);
+            
+            p.setup = () => {
+                const container = document.getElementById(config.containerId);
+                const canvas = p.createCanvas(container.clientWidth, container.clientWidth);
+                canvas.parent(container);
+                origin = p.createVector(p.width / 2, p.height / 2);
+                generateNewProblem();
+                document.getElementById(config.submitBtn).addEventListener('click', checkAnswer);
+                document.getElementById(config.nextBtn).addEventListener('click', generateNewProblem);
+            };
+            
+            const generateNewProblem = () => {
+                vecA = p5.Vector.random2D().mult(p.random(50, p.width / 2 - 50));
+                vecB = p5.Vector.random2D().mult(p.random(50, p.width / 2 - 50));
+                correctResultant = config.operation(vecA, vecB);
+                userResultant = null;
+                showCorrectAnswer = false;
+                feedbackEl.textContent = '';
+                p.loop();
+            };
+
+            p.draw = () => {
+                p.background(255);
+                drawGrid(p, p.width, p.height, origin);
+                drawVector(p, origin, vecA, '#0000FF');
+                drawVector(p, origin, vecB, '#FF0000');
+                if (userResultant) drawVector(p, origin, userResultant, '#000000');
+                if (showCorrectAnswer) drawVector(p, origin, correctResultant, '#00C49A');
+            };
+            
+            p.mousePressed = () => {
+                if (p.mouseX > 0 && p.mouseX < p.width && p.mouseY > 0 && p.mouseY < p.height) {
+                    userResultant = p.createVector(0, 0);
+                    showCorrectAnswer = false;
+                    feedbackEl.textContent = '';
+                    p.loop();
+                }
+            };
+
+            p.mouseDragged = () => {
+                if (userResultant) userResultant.set(p.mouseX - origin.x, -(p.mouseY - origin.y));
+            };
+            
+            p.mouseReleased = () => p.noLoop();
+            
+            const checkAnswer = () => {
+                if (!userResultant) {
+                    feedbackEl.textContent = 'Please draw a vector first.';
+                    feedbackEl.style.color = '#FF8C00';
+                    return;
+                }
+                if (userResultant.dist(correctResultant) < 15) {
+                    feedbackEl.textContent = 'Correct! Well done! 🎉';
+                    feedbackEl.style.color = 'green';
+                } else {
+                    feedbackEl.textContent = 'Not quite. The correct answer is shown in green.';
+                    feedbackEl.style.color = 'red';
+                }
+                showCorrectAnswer = true;
+                p.redraw();
+            };
+            
+            p.windowResized = () => {
+                const container = document.getElementById(config.containerId);
+                p.resizeCanvas(container.clientWidth, container.clientWidth);
+                origin.set(p.width / 2, p.height / 2);
+                p.redraw();
+            };
+        };
+        
+        /**
+         * Sketch 3: Vector Decomposition
+         */
+        const decompositionSketch = (p) => {
+            let vecV, origin, showCorrectAnswer = false;
+            const xInput = document.getElementById('x-comp');
+            const yInput = document.getElementById('y-comp');
+            const feedbackEl = document.getElementById('feedback-decomposition');
+            
+            p.setup = () => {
+                const container = document.getElementById('canvas-decompose-container');
+                const canvas = p.createCanvas(container.clientWidth, container.clientWidth);
+                canvas.parent(container);
+                origin = p.createVector(p.width / 2, p.height / 2);
+                generateNewProblem();
+                document.getElementById('submit-decomposition').addEventListener('click', checkDecompositionAnswer);
+                document.getElementById('next-decomposition').addEventListener('click', generateNewProblem);
+            };
+
+            const generateNewProblem = () => {
+                vecV = p5.Vector.random2D().mult(p.random(80, p.width / 2 - 20));
+                showCorrectAnswer = false;
+                feedbackEl.textContent = '';
+                xInput.value = '';
+                yInput.value = '';
+                p.redraw();
+            };
+
+            p.draw = () => {
+                p.background(255);
+                drawGrid(p, p.width, p.height, origin);
+                drawVector(p, origin, vecV, '#8A2BE2');
+                if (showCorrectAnswer) {
+                    drawVector(p, origin, p.createVector(vecV.x, 0), 'rgba(255, 0, 0, 0.7)');
+                    drawVector(p, origin, p.createVector(0, vecV.y), 'rgba(0, 0, 255, 0.7)');
+                }
+                p.noLoop();
+            };
+
+            const checkDecompositionAnswer = () => {
+                const userX = parseFloat(xInput.value);
+                const userY = parseFloat(yInput.value);
+                if (isNaN(userX) || isNaN(userY)) {
+                    feedbackEl.textContent = 'Please enter valid numbers for both components.';
+                    feedbackEl.style.color = '#FF8C00';
+                    return;
+                }
+                const correctX = Math.round(vecV.x / gridSize);
+                const correctY = Math.round(vecV.y / gridSize);
+                if (userX === correctX && userY === correctY) {
+                    feedbackEl.textContent = 'Correct! Excellent work! ✅';
+                    feedbackEl.style.color = 'green';
+                } else {
+                    feedbackEl.textContent = `Incorrect. The correct components are X ≈ ${correctX}, Y ≈ ${correctY} grid units.`;
+                    feedbackEl.style.color = 'red';
+                }
+                showCorrectAnswer = true;
+                p.redraw();
+            };
+            
+            p.windowResized = () => {
+                const container = document.getElementById('canvas-decompose-container');
+                p.resizeCanvas(container.clientWidth, container.clientWidth);
+                origin.set(p.width / 2, p.height / 2);
+                p.redraw();
+            };
+        };
+
+        /**
+         * Sketch 4: Head-to-Tail Addition
+         */
+        const headToTailSketch = (p) => {
+            let vecA, vecB, userResultant, correctResultant;
+            let origin;
+            let isDraggingB = false;
+            let state = 'ARRANGING'; // ARRANGING, DRAWING, FEEDBACK
+            let showCorrect = false;
+
+            const instructionEl = document.getElementById('instruction-head-to-tail');
+            const feedbackEl = document.getElementById('feedback-head-to-tail');
+
+            p.setup = () => {
+                const container = document.getElementById('canvas-head-to-tail-container');
+                const canvas = p.createCanvas(container.clientWidth, container.clientWidth);
+                canvas.parent(container);
+                origin = p.createVector(p.width / 2, p.height / 2);
+                generateNewProblem();
+                document.getElementById('submit-head-to-tail').addEventListener('click', checkAnswer);
+                document.getElementById('next-head-to-tail').addEventListener('click', generateNewProblem);
+            };
+
+            const generateNewProblem = () => {
+                state = 'ARRANGING';
+                showCorrect = false;
+                userResultant = null;
+                isDraggingB = false;
+                
+                const vecA_comp = p5.Vector.random2D().mult(p.random(80, 120));
+                const vecB_comp = p5.Vector.random2D().mult(p.random(80, 120));
+                
+                vecA = {
+                    start: p.createVector(p.width * 0.2, p.height * 0.5),
+                    vec: vecA_comp
+                };
+                vecA.end = p5.Vector.add(vecA.start, p.createVector(vecA.vec.x, -vecA.vec.y));
+
+                vecB = {
+                    start: p.createVector(p.width * 0.8, p.height * 0.5),
+                    vec: vecB_comp
+                };
+                
+                correctResultant = p5.Vector.add(vecA.vec, vecB.vec);
+
+                instructionEl.innerHTML = '<strong>Step 1:</strong> Drag the tail of the <span class="vector-b-label">red vector (B)</span> to the head of the <span class="vector-a-label">blue vector (A)</span>.';
+                feedbackEl.textContent = '';
+                p.loop();
+            };
+
+            p.draw = () => {
+                p.background(255);
+                drawGrid(p, p.width, p.height, origin);
+                
+                drawVector(p, vecA.start, vecA.vec, '#0000FF');
+                drawVector(p, vecB.start, vecB.vec, '#FF0000');
+
+                if (userResultant) {
+                    drawVector(p, vecA.start, userResultant, '#000000');
+                }
+                if (showCorrect) {
+                     drawVector(p, vecA.start, correctResultant, '#00C49A');
+                }
+            };
+            
+            p.mousePressed = () => {
+                // BUG FIX: Ignore mouse presses that happen outside the canvas area.
+                if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) {
+                    return;
+                }
+
+                if (state === 'ARRANGING') {
+                    if (p.dist(p.mouseX, p.mouseY, vecB.start.x, vecB.start.y) < 15) {
+                        isDraggingB = true;
+                        p.loop();
+                    }
+                } else if (state === 'DRAWING') {
+                    userResultant = p.createVector(0,0);
+                    showCorrect = false;
+                    feedbackEl.textContent = '';
+                    p.loop();
+                }
+            };
+
+            p.mouseDragged = () => {
+                if (isDraggingB && state === 'ARRANGING') {
+                    vecB.start.set(p.mouseX, p.mouseY);
+                } else if (userResultant && state === 'DRAWING') {
+                    userResultant.set(p.mouseX - vecA.start.x, -(p.mouseY - vecA.start.y));
+                }
+            };
+
+            p.mouseReleased = () => {
+                if (isDraggingB && state === 'ARRANGING') {
+                    isDraggingB = false;
+                    if (p.dist(p.mouseX, p.mouseY, vecA.end.x, vecA.end.y) < 20) {
+                        vecB.start.set(vecA.end); // Snap into place
+                        state = 'DRAWING';
+                        instructionEl.innerHTML = '<strong>Step 2:</strong> Now, draw the resultant vector from the tail of A to the head of B.';
+                        feedbackEl.textContent = 'Vectors arranged correctly!';
+                        feedbackEl.style.color = 'green';
+                    }
+                    p.noLoop();
+                    p.redraw();
+                } else if (state === 'DRAWING') {
+                    p.noLoop();
+                }
+            };
+            
+            const checkAnswer = () => {
+                 if (state !== 'DRAWING') {
+                    feedbackEl.textContent = 'Please arrange the vectors first.';
+                    feedbackEl.style.color = '#FF8C00';
+                    return;
+                }
+                if (!userResultant) {
+                    feedbackEl.textContent = 'Please draw the resultant vector.';
+                     feedbackEl.style.color = '#FF8C00';
+                    return;
+                }
+                if (userResultant.dist(correctResultant) < 15) {
+                    feedbackEl.textContent = 'Correct! Perfect! 🏆';
+                    feedbackEl.style.color = 'green';
+                } else {
+                    feedbackEl.textContent = 'Not quite. The correct resultant is shown in green.';
+                    feedbackEl.style.color = 'red';
+                }
+                showCorrect = true;
+                state = 'FEEDBACK';
+                p.redraw();
+            };
+            
+            p.windowResized = () => {
+                const container = document.getElementById('canvas-head-to-tail-container');
+                p.resizeCanvas(container.clientWidth, container.clientWidth);
+                // Could add logic to reposition vectors on resize, but for now just redraw.
+                p.redraw();
+            };
+        };
+
+        // This ensures the DOM is fully loaded before we try to create the p5 instances
+        window.addEventListener('DOMContentLoaded', (event) => {
+            // Sketch 1
+            new p5(createOperatorSketch({
+                containerId: 'canvas-add-container',
+                feedbackEl: 'feedback-addition',
+                submitBtn: 'submit-addition',
+                nextBtn: 'next-addition',
+                operation: (a, b) => p5.Vector.add(a, b)
+            }));
+            // Sketch 2
+            new p5(createOperatorSketch({
+                containerId: 'canvas-subtract-container',
+                feedbackEl: 'feedback-subtraction',
+                submitBtn: 'submit-subtraction',
+                nextBtn: 'next-subtraction',
+                operation: (a, b) => p5.Vector.sub(a, b)
+            }));
+            // Sketch 3
+            new p5(decompositionSketch);
+            // Sketch 4
+            new p5(headToTailSketch);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Wave Lab</title>
+    <style>
+        :root {
+            --bg-color: #050510;
+            --card-bg: rgba(20, 20, 40, 0.7);
+            --primary-neon: #00f3ff;
+            --secondary-neon: #bc13fe;
+            --text-color: #e0e0e0;
+            --grid-color: rgba(255, 255, 255, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 50%, #1a1a3a 0%, #050510 100%);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(to right, var(--primary-neon), var(--secondary-neon));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+        }
+
+        /* Main Layout */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+            position: relative;
+        }
+
+        @media (min-width: 1024px) {
+            main {
+                flex-direction: row;
+            }
+        }
+
+        /* Canvas Container */
+        #canvas-container {
+            flex: 2;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Overlay Info on Canvas */
+        .overlay-stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.7);
+            pointer-events: none;
+        }
+
+        /* Controls Panel */
+        #controls {
+            flex: 1;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow-y: auto;
+            max-width: 100%;
+        }
+
+        @media (min-width: 1024px) {
+            #controls {
+                max-width: 350px;
+            }
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        label {
+            font-size: 0.85rem;
+            color: var(--primary-neon);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .value-display {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: white;
+        }
+
+        /* Custom Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        /* Slider Track */
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Slider Thumb */
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--secondary-neon);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px; /* center on track */
+            box-shadow: 0 0 10px var(--secondary-neon);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #fff;
+        }
+
+        /* Math Display Area */
+        .math-display {
+            margin-top: auto;
+            padding: 1rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+        }
+
+        .equation {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .equation span {
+            color: var(--primary-neon);
+        }
+
+        .legend {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 5px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Pause Button Style */
+        #pause-btn {
+            width: 100%;
+            padding: 0.8rem;
+            margin-top: 1rem;
+            background: rgba(0, 243, 255, 0.1);
+            border: 1px solid var(--primary-neon);
+            border-radius: 6px;
+            color: var(--primary-neon);
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        #pause-btn:hover {
+            background: var(--primary-neon);
+            color: #000;
+            box-shadow: 0 0 20px var(--primary-neon);
+        }
+
+        #pause-btn.paused {
+            background: rgba(188, 19, 254, 0.1);
+            border-color: var(--secondary-neon);
+            color: var(--secondary-neon);
+        }
+
+        #pause-btn.paused:hover {
+            background: var(--secondary-neon);
+            color: #fff;
+            box-shadow: 0 0 20px var(--secondary-neon);
+        }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Waveform <span style="font-size: 0.8em; color: var(--secondary-neon);">v1.0</span></h1>
+    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Physics Engine Active</div>
+</header>
+
+<main>
+    <div id="canvas-container">
+        <canvas id="waveCanvas"></canvas>
+        <div class="overlay-stats">
+            <div>t: <span id="time-display">0.00</span> s</div>
+        </div>
+    </div>
+
+    <div id="controls">
+        
+        <!-- Amplitude -->
+        <div class="control-group">
+            <div class="label-row">
+                <label for="amplitude">Amplitude (A)</label>
+                <span id="val-amplitude" class="value-display">1.00</span>
+            </div>
+            <input type="range" id="amplitude" min="0" max="3" step="0.1" value="1.5">
+        </div>
+
+        <!-- Wave Number -->
+        <div class="control-group">
+            <div class="label-row">
+                <label for="wavenumber">Wave Number (k)</label>
+                <span id="val-wavenumber" class="value-display">2.00</span>
+            </div>
+            <input type="range" id="wavenumber" min="0.5" max="10" step="0.1" value="2.0">
+            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Controls Wavelength</div>
+        </div>
+
+        <!-- Angular Frequency -->
+        <div class="control-group">
+            <div class="label-row">
+                <label for="frequency">Angular Freq (&omega;)</label>
+                <span id="val-frequency" class="value-display">2.00</span>
+            </div>
+            <input type="range" id="frequency" min="0" max="20" step="0.1" value="3.0">
+            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Controls Period</div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1);">
+
+        <!-- Wave Speed (Calculated/Driver) -->
+        <div class="control-group">
+            <div class="label-row">
+                <label for="speed" style="color: var(--secondary-neon);">Wave Speed (v)</label>
+                <span id="val-speed" class="value-display">1.50</span>
+            </div>
+            <input type="range" id="speed" min="-10" max="10" step="0.1" value="1.5">
+            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">Modifies &omega;, keeps k constant</div>
+        </div>
+
+        <button id="pause-btn">Pause Animation</button>
+
+        <div class="math-display">
+            <div class="equation">
+                y(x,t) = <span id="eq-A">1.5</span> sin(<span id="eq-k">2.0</span>x - <span id="eq-w">3.0</span>t)
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="dot" style="background:var(--primary-neon)"></div>Wave</div>
+                <div class="legend-item"><div class="dot" style="background:#ff0055"></div>Particle</div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+    /**
+     * Physics Application Logic
+     */
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI Elements
+    const els = {
+        amp: document.getElementById('amplitude'),
+        k: document.getElementById('wavenumber'),
+        w: document.getElementById('frequency'),
+        v: document.getElementById('speed'),
+        valAmp: document.getElementById('val-amplitude'),
+        valK: document.getElementById('val-wavenumber'),
+        valW: document.getElementById('val-frequency'),
+        valV: document.getElementById('val-speed'),
+        eqA: document.getElementById('eq-A'),
+        eqK: document.getElementById('eq-k'),
+        eqW: document.getElementById('eq-w'),
+        time: document.getElementById('time-display'),
+        pauseBtn: document.getElementById('pause-btn')
+    };
+
+    // State
+    let params = {
+        A: parseFloat(els.amp.value),
+        k: parseFloat(els.k.value),
+        w: parseFloat(els.w.value),
+        v: parseFloat(els.v.value)
+    };
+
+    let time = 0;
+    let isPaused = false;
+    let particles = []; 
+    
+    // Initialize Resize Handler
+    function resize() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Initialize Particles (dots fixed on x-axis that move up/down)
+    for(let i=0; i<10; i++) {
+        particles.push({
+            xRatio: 0.1 + (i * 0.09) // Position 10% to 90% across screen
+        });
+    }
+
+    /**
+     * Physics Core Logic
+     */
+
+    // 1. Direct Parameter Updates
+    els.amp.addEventListener('input', (e) => {
+        params.A = parseFloat(e.target.value);
+        updateUI();
+    });
+
+    els.k.addEventListener('input', (e) => {
+        // Changing k (medium properties) usually affects v if w is constant, 
+        // or affects w if v is constant. 
+        // Standard interactive graph behavior: Keep Omega constant, update V.
+        params.k = parseFloat(e.target.value);
+        if (params.k === 0) params.k = 0.01; // Avoid divide by zero
+        params.v = params.w / params.k;
+        updateUI();
+    });
+
+    els.w.addEventListener('input', (e) => {
+        // Changing source freq (w) -> updates v, keeps k constant
+        params.w = parseFloat(e.target.value);
+        params.v = params.w / params.k;
+        updateUI();
+    });
+
+    // 2. Speed Slider Logic (The specific request)
+    // "If that slider is manipulated, the wave number stays while angular frequency is to be modified."
+    els.v.addEventListener('input', (e) => {
+        params.v = parseFloat(e.target.value);
+        // v = w / k  =>  w = v * k
+        params.w = params.v * params.k;
+        updateUI();
+    });
+
+    // 3. Pause Button Logic
+    els.pauseBtn.addEventListener('click', () => {
+        isPaused = !isPaused;
+        if (isPaused) {
+            els.pauseBtn.textContent = "Resume Animation";
+            els.pauseBtn.classList.add('paused');
+        } else {
+            els.pauseBtn.textContent = "Pause Animation";
+            els.pauseBtn.classList.remove('paused');
+        }
+    });
+
+    function updateUI() {
+        // Sync JS state to DOM elements
+        els.amp.value = params.A;
+        els.k.value = params.k;
+        els.w.value = params.w; // Derived or direct
+        els.v.value = params.v; // Derived or direct
+
+        // Update Text Displays
+        els.valAmp.textContent = params.A.toFixed(2);
+        els.valK.textContent = params.k.toFixed(2);
+        els.valW.textContent = params.w.toFixed(2);
+        els.valV.textContent = params.v.toFixed(2);
+
+        // Update Equation HTML
+        els.eqA.textContent = params.A.toFixed(2);
+        els.eqK.textContent = params.k.toFixed(2);
+        els.eqW.textContent = params.w.toFixed(2);
+    }
+
+    /**
+     * Animation Loop
+     */
+    let lastFrameTime = performance.now();
+
+    function draw() {
+        const now = performance.now();
+        let dt = (now - lastFrameTime) / 1000;
+        lastFrameTime = now;
+
+        if (isPaused) {
+            dt = 0;
+        }
+
+        // Increment physics time
+        time += dt;
+        els.time.textContent = time.toFixed(2);
+
+        // Clear Background
+        ctx.fillStyle = '#050510'; // Match BG
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const width = canvas.width;
+        const height = canvas.height;
+        const centerY = height / 2;
+
+        // Scale factors
+        // We want 'k' to mean something visually reasonable.
+        // Let's say screen width represents 4PI units of space (2 wavelengths if k=1)
+        const scaleX = 200; // Pixels per unit x
+        const scaleY = 50;  // Pixels per unit Amplitude
+
+        // Draw Center Axis
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(width, centerY);
+        ctx.stroke();
+
+        // Draw Grid Verticals
+        ctx.beginPath();
+        for(let i=0; i<width; i+= scaleX) {
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, height);
+        }
+        ctx.stroke();
+
+        // --- Draw Wave ---
+        ctx.beginPath();
+        ctx.lineWidth = 3;
+        
+        // Create Neon Gradient
+        const gradient = ctx.createLinearGradient(0, 0, width, 0);
+        gradient.addColorStop(0, '#00f3ff');
+        gradient.addColorStop(0.5, '#bc13fe');
+        gradient.addColorStop(1, '#00f3ff');
+        ctx.strokeStyle = gradient;
+
+        // Draw sine path
+        // y = A sin(kx - wt)
+        for (let xPixel = 0; xPixel <= width; xPixel += 2) {
+            // Convert pixel to physics x
+            const xPhys = (xPixel / scaleX);
+            
+            const yPhys = params.A * Math.sin((params.k * xPhys) - (params.w * time));
+            
+            // Convert physics y to pixel y
+            const yPixel = centerY - (yPhys * scaleY); // Minus because canvas Y is inverted
+
+            if (xPixel === 0) {
+                ctx.moveTo(xPixel, yPixel);
+            } else {
+                ctx.lineTo(xPixel, yPixel);
+            }
+        }
+        
+        // Glow Effect
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "rgba(0, 243, 255, 0.8)";
+        ctx.stroke();
+        ctx.shadowBlur = 0; // Reset for other elements
+
+        // --- Draw Particles ---
+        // Visual aid to show medium moves up/down, not left/right
+        particles.forEach(p => {
+            const xPixel = p.xRatio * width;
+            const xPhys = xPixel / scaleX;
+            const yPhys = params.A * Math.sin((params.k * xPhys) - (params.w * time));
+            const yPixel = centerY - (yPhys * scaleY);
+
+            ctx.beginPath();
+            ctx.fillStyle = '#ff0055';
+            ctx.arc(xPixel, yPixel, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Particle Glow
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#ff0055";
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        requestAnimationFrame(draw);
+    }
+
+    // Force initial UI Sync
+    updateUI();
+    // Start loop
+    requestAnimationFrame(draw);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Harmonic Motion Explorer</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- KaTeX for Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        scifi: {
+                            bg: '#0f172a',
+                            panel: '#1e293b',
+                            accent: '#38bdf8',
+                            glow: 'rgba(56, 189, 248, 0.5)'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 selection:bg-sky-500 selection:text-white">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-6xl glass-panel rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+        
+        <!-- Left Column: Controls -->
+        <div class="w-full md:w-1/3 p-6 border-r border-slate-700 bg-slate-900/50 flex flex-col gap-6">
+            
+            <div class="mb-2">
+                <h1 class="text-2xl font-bold text-white tracking-tight">SHM Explorer</h1>
+                <div id="main-equation" class="mt-4 text-lg text-sky-300 font-mono"></div>
+            </div>
+
+            <!-- Sliders -->
+            <div class="space-y-6">
+                <!-- Amplitude -->
+                <div class="group">
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm text-slate-400 font-medium">Amplitude (<span id="math-A"></span>)</label>
+                        <span id="val-A" class="font-mono text-sky-400 text-sm">1.00</span>
+                    </div>
+                    <input type="range" id="input-A" min="0" max="5" step="0.1" value="2">
+                </div>
+
+                <!-- Omega -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm text-slate-400 font-medium">Angular Freq (<span id="math-omega"></span>)</label>
+                        <span id="val-omega" class="font-mono text-sky-400 text-sm">1.00</span>
+                    </div>
+                    <input type="range" id="input-omega" min="0.1" max="10" step="0.1" value="2">
+                </div>
+
+                <!-- Phi -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm text-slate-400 font-medium">Phase Constant (<span id="math-phi"></span>)</label>
+                        <span id="val-phi" class="font-mono text-sky-400 text-sm">0.00</span>
+                    </div>
+                    <input type="range" id="input-phi" min="-6.28" max="6.28" step="0.01" value="0">
+                    <div class="text-xs text-slate-500 text-right mt-1">Range: -2π to 2π</div>
+                </div>
+            </div>
+
+            <!-- Derived Stats -->
+            <div class="mt-auto p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h3 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Calculated Properties</h3>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-xs text-slate-400 mb-1">Period (<span id="math-T"></span>)</div>
+                        <div id="display-T" class="text-xl font-mono text-emerald-400">0.00 s</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 mb-1">Frequency (<span id="math-f"></span>)</div>
+                        <div id="display-f" class="text-xl font-mono text-emerald-400">0.00 Hz</div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 pt-4 border-t border-slate-700 grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-xs text-slate-400 mb-1">Max Velocity</div>
+                        <div id="display-vmax" class="text-sm font-mono text-amber-400">0.00 m/s</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 mb-1">Max Accel</div>
+                        <div id="display-amax" class="text-sm font-mono text-rose-400">0.00 m/s²</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Visualization -->
+        <div class="w-full md:w-2/3 bg-slate-900 relative h-[600px] md:h-auto">
+            <canvas id="shmCanvas" class="w-full h-full block"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // --- KaTeX Rendering Setup ---
+        document.addEventListener("DOMContentLoaded", function() {
+            katex.render("x(t) = A \\cos(\\omega t + \\phi)", document.getElementById("main-equation"), {
+                throwOnError: false, displayMode: true
+            });
+            katex.render("A", document.getElementById("math-A"));
+            katex.render("\\omega", document.getElementById("math-omega"));
+            katex.render("\\phi", document.getElementById("math-phi"));
+            katex.render("T = 2\\pi/\\omega", document.getElementById("math-T"));
+            katex.render("f = \\omega/2\\pi", document.getElementById("math-f"));
+            
+            // Initialize app logic
+            initApp();
+        });
+
+        // --- App Logic ---
+        const canvas = document.getElementById('shmCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // DOM Elements
+        const inputA = document.getElementById('input-A');
+        const inputOmega = document.getElementById('input-omega');
+        const inputPhi = document.getElementById('input-phi');
+        
+        const valA = document.getElementById('val-A');
+        const valOmega = document.getElementById('val-omega');
+        const valPhi = document.getElementById('val-phi');
+        
+        const displayT = document.getElementById('display-T');
+        const displayF = document.getElementById('display-f');
+        const displayVMax = document.getElementById('display-vmax');
+        const displayAMax = document.getElementById('display-amax');
+
+        // State
+        let params = {
+            A: parseFloat(inputA.value),
+            omega: parseFloat(inputOmega.value),
+            phi: parseFloat(inputPhi.value)
+        };
+        
+        // Animation State
+        let simulationTime = 0;
+        let lastFrameTime = 0;
+        const timeWindow = 10; // Loop every 10 seconds
+
+        function updateParams() {
+            params.A = parseFloat(inputA.value);
+            params.omega = parseFloat(inputOmega.value);
+            params.phi = parseFloat(inputPhi.value);
+
+            // Update UI Text
+            valA.textContent = params.A.toFixed(2);
+            valOmega.textContent = params.omega.toFixed(2) + " rad/s";
+            valPhi.textContent = params.phi.toFixed(2) + " rad";
+
+            // Calculate Period and Frequency
+            const T = (2 * Math.PI) / params.omega;
+            const f = params.omega / (2 * Math.PI);
+
+            displayT.textContent = T.toFixed(3) + " s";
+            displayF.textContent = f.toFixed(3) + " Hz";
+            
+            // Calculate Max Velocity (A * omega) and Max Accel (A * omega^2)
+            const vMax = params.A * params.omega;
+            const aMax = params.A * params.omega * params.omega;
+            
+            displayVMax.textContent = vMax.toFixed(2) + " units/s";
+            displayAMax.textContent = aMax.toFixed(2) + " units/s²";
+        }
+
+        function resizeCanvas() {
+            // Handle High DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            ctx.scale(dpr, dpr);
+            
+            // Store logic dimensions
+            canvas.logicalWidth = rect.width;
+            canvas.logicalHeight = rect.height;
+        }
+
+        // Physics Functions
+        function getPos(t) { return params.A * Math.cos(params.omega * t + params.phi); }
+        function getVel(t) { return -params.A * params.omega * Math.sin(params.omega * t + params.phi); }
+        function getAcc(t) { return -params.A * Math.pow(params.omega, 2) * Math.cos(params.omega * t + params.phi); }
+
+        function drawGraph(ctx, type, tStart, tEnd, xStart, yStart, width, height, color, label, unit) {
+            
+            // Determine Scale
+            // FIX: We use the MAXIMUM slider value (5) to determine the scale ceiling.
+            // This ensures that when user lowers A, the graph actually shrinks visually.
+            const MAX_SLIDER_A = 5;
+            let maxVal = 1;
+
+            if (type === 'pos') {
+                maxVal = MAX_SLIDER_A; 
+            } else if (type === 'vel') {
+                // Scale based on Max A * current Omega
+                // This keeps the graph fitting well when Omega changes, but shows A changes clearly.
+                maxVal = MAX_SLIDER_A * params.omega;
+            } else if (type === 'acc') {
+                // Scale based on Max A * current Omega^2
+                maxVal = MAX_SLIDER_A * Math.pow(params.omega, 2);
+            }
+            
+            // Prevent division by zero or super tiny scales
+            if (maxVal < 0.1) maxVal = 1;
+
+            // Padding factor so peaks don't touch edges exactly
+            maxVal *= 1.2;
+            
+            const centerY = yStart + height / 2;
+            const pixelsPerSecond = width / timeWindow;
+            const pixelsPerUnit = (height / 2) / maxVal;
+
+            // Draw Background & Grid
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(xStart, yStart, width, height);
+            ctx.clip();
+
+            // Zero Line
+            ctx.strokeStyle = '#334155';
+            ctx.beginPath();
+            ctx.moveTo(xStart, centerY);
+            ctx.lineTo(xStart + width, centerY);
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = color;
+            ctx.font = 'bold 12px "Inter"';
+            ctx.textAlign = 'right';
+            ctx.fillText(label, xStart + width - 10, yStart + 20);
+
+            // Curve
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+
+            const step = 2; 
+            let firstPoint = true;
+
+            for (let px = 0; px <= width; px += step) {
+                const t = px / pixelsPerSecond;
+                let val = 0;
+                if(type === 'pos') val = getPos(t);
+                else if(type === 'vel') val = getVel(t);
+                else if(type === 'acc') val = getAcc(t);
+
+                const py = centerY - (val * pixelsPerUnit);
+                const canvasX = xStart + px;
+
+                if (firstPoint) {
+                    ctx.moveTo(canvasX, py);
+                    firstPoint = false;
+                } else {
+                    ctx.lineTo(canvasX, py);
+                }
+            }
+            ctx.stroke();
+
+            // Current Time Marker
+            const currentGraphX = xStart + (simulationTime * pixelsPerSecond);
+            let currentVal = 0;
+            if(type === 'pos') currentVal = getPos(simulationTime);
+            else if(type === 'vel') currentVal = getVel(simulationTime);
+            else if(type === 'acc') currentVal = getAcc(simulationTime);
+            
+            const currentGraphY = centerY - (currentVal * pixelsPerUnit);
+
+            // Vertical line
+            ctx.beginPath();
+            ctx.strokeStyle = '#475569';
+            ctx.setLineDash([2, 4]);
+            ctx.moveTo(currentGraphX, yStart);
+            ctx.lineTo(currentGraphX, yStart + height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Dot
+            ctx.beginPath();
+            ctx.fillStyle = color;
+            ctx.arc(currentGraphX, currentGraphY, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+            
+            // Return current Y for linking (only used for Pos graph)
+            return currentGraphY;
+        }
+
+        function draw(timestamp) {
+            if (!lastFrameTime) lastFrameTime = timestamp;
+            const deltaTime = (timestamp - lastFrameTime) / 1000; 
+            lastFrameTime = timestamp;
+            
+            simulationTime += deltaTime;
+            if (simulationTime > timeWindow) simulationTime = 0;
+
+            const w = canvas.logicalWidth;
+            const h = canvas.logicalHeight;
+
+            // Layout
+            const bobPanelWidth = Math.min(w * 0.2, 120); 
+            const graphXStart = bobPanelWidth;
+            const graphWidth = w - graphXStart;
+            
+            // 3 Vertical Sections
+            const sectionHeight = h / 3;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // --- Draw Graphs ---
+            // 1. Position
+            const posY = drawGraph(ctx, 'pos', 0, timeWindow, graphXStart, 0, graphWidth, sectionHeight, '#38bdf8', 'Position x(t)', 'm');
+            
+            // 2. Velocity
+            drawGraph(ctx, 'vel', 0, timeWindow, graphXStart, sectionHeight, graphWidth, sectionHeight, '#fbbf24', 'Velocity v(t)', 'm/s');
+            
+            // 3. Acceleration
+            drawGraph(ctx, 'acc', 0, timeWindow, graphXStart, sectionHeight * 2, graphWidth, sectionHeight, '#f43f5e', 'Acceleration a(t)', 'm/s²');
+
+            // --- Draw Bob (Left Panel) ---
+            // The Bob is physically tied to Position. It lives in the top section's Y coordinates.
+            
+            const bobCenterX = bobPanelWidth / 2;
+            
+            // Panel Separator
+            ctx.strokeStyle = '#334155';
+            ctx.beginPath();
+            ctx.moveTo(bobPanelWidth, 0);
+            ctx.lineTo(bobPanelWidth, h);
+            ctx.stroke();
+
+            // Projection Line (Position Only)
+            const currentGraphX = graphXStart + (simulationTime * (graphWidth / timeWindow));
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)'; 
+            ctx.setLineDash([2, 2]);
+            ctx.moveTo(bobCenterX, posY);
+            ctx.lineTo(currentGraphX, posY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Spring & Mass
+            // We use the same 'posY' derived from the first graph for the bob's vertical position
+            const bobRadius = 12;
+            const springTopY = 20; // Anchor
+            const springBottomY = posY - bobRadius;
+
+            // Anchor block
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(bobCenterX - 15, 0, 30, springTopY);
+
+            // Spring
+            ctx.beginPath();
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 2;
+            ctx.moveTo(bobCenterX, springTopY);
+            const numCoils = 10;
+            const coilH = (springBottomY - springTopY) / numCoils;
+            for(let i=1; i<=numCoils; i++){
+                let xOff = (i%2===0) ? 8 : -8;
+                if(i===numCoils) xOff = 0;
+                ctx.lineTo(bobCenterX + xOff, springTopY + i*coilH - (coilH/2));
+                ctx.lineTo(bobCenterX, springTopY + i*coilH);
+            }
+            ctx.stroke();
+
+            // Bob Mass
+            ctx.beginPath();
+            ctx.fillStyle = '#38bdf8';
+            ctx.arc(bobCenterX, posY, bobRadius, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Labels for V and A on the left side?
+            // Maybe just arrows on the bob?
+            // Let's add Velocity Vector arrow on the Bob
+            const vVal = getVel(simulationTime);
+            const vScale = 2; // pixel per unit
+            // Only draw if V is significant
+            if(Math.abs(vVal) > 0.1) {
+                const arrowLen = vVal * 2; // Scale factor
+                const arrowY = posY;
+                const arrowX = bobCenterX + 25;
+                
+                // Draw arrow indicating velocity direction next to bob
+                ctx.beginPath();
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 2;
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(arrowX, arrowY - arrowLen); // - because Canvas Y is inverted relative to physics Y usually, but here Y grows down.
+                // Actually, if v is positive (moving up in physics, but wait... +x is usually up? In this graph +x is up visually.)
+                // Our graph: CenterY is 0. Values above are positive.
+                // Canvas Y: 0 is top. 
+                // py = centerY - val. 
+                // If val increases (velocity +), py decreases (moves up).
+                // So if V is positive, arrow should point UP.
+                // arrowEnd = arrowY - arrowLen. Correct.
+                
+                ctx.stroke();
+                
+                // Arrow head
+                // ...keeping it simple to avoid clutter
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        function initApp() {
+            // Listeners
+            inputA.addEventListener('input', updateParams);
+            inputOmega.addEventListener('input', updateParams);
+            inputPhi.addEventListener('input', updateParams);
+            
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Initial setup
+            resizeCanvas();
+            updateParams(); 
+            
+            // Start Animation Loop
+            requestAnimationFrame(draw);
+        }
+
+    </script>
+</body>
+</html>

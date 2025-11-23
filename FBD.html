@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Free Body Diagram Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .force-button.selected {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            border-color: #3b82f6;
+        }
+        canvas {
+            cursor: crosshair;
+        }
+        .object-selected {
+            box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.7); /* blue-500 glow */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <header class="mb-4 text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Free Body Diagram Sandbox</h1>
+            <div class="mt-4 max-w-sm mx-auto">
+                 <label for="scenario-select" class="block text-sm font-medium text-gray-700 mb-1">Select a Scenario:</label>
+                 <select id="scenario-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="box_on_surface_at_rest">1. Box on a Horizontal Surface</option>
+                    <option value="box_on_incline_at_rest">2. Box on an Inclined Plane</option>
+                    <option value="box_pulled_horizontally">3. Box Pulled on a Frictionless Surface</option>
+                    <option value="box_hanging_static">4. Box Hanging from a Rope</option>
+                    <option value="box_static_friction">5. Box Pulled (with Static Friction)</option>
+                    <option value="box_kinetic_friction">6. Box Sliding (with Kinetic Friction)</option>
+                    <option value="atwood_machine">7. Atwood Machine</option>
+                    <option value="stacked_boxes">8. Stacked Boxes</option>
+                 </select>
+            </div>
+            <p id="scenario-title" class="text-lg text-gray-600 mt-3"></p>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-8">
+            <!-- Left Panel: Toolbox and Controls -->
+            <div class="md:w-1/3 flex flex-col gap-6">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3">Force Toolbox</h2>
+                    <p id="toolbox-instructions" class="text-sm text-gray-500 mb-4">Select a force, then click and drag on the box to draw it.</p>
+                    <div id="force-toolbox" class="grid grid-cols-2 gap-3">
+                        <button data-force="gravity" class="force-button p-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-200 transition-all">Gravity (F<sub>g</sub>)</button>
+                        <button data-force="normal" class="force-button p-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-200 transition-all">Normal (F<sub>N</sub>)</button>
+                        <button data-force="tension" class="force-button p-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-200 transition-all">Tension (T)</button>
+                        <button data-force="friction" class="force-button p-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-200 transition-all">Friction (f)</button>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3">Controls</h2>
+                    <div class="flex flex-col gap-3">
+                        <button id="check-button" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-all shadow-md">Check My Work</button>
+                        <button id="reset-button" class="w-full bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition-all shadow-md">Reset Diagram</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Canvas and Feedback -->
+            <div class="md:w-2/3 flex flex-col">
+                <div class="w-full aspect-video bg-sky-100 border-2 border-dashed border-gray-300 rounded-lg shadow-inner overflow-hidden">
+                    <canvas id="fbd-canvas"></canvas>
+                </div>
+                <div id="feedback-box" class="mt-4 p-4 rounded-lg text-center font-medium text-base transition-all h-20 flex items-center justify-center">
+                    <p id="feedback-text">Select a force and draw on the canvas.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM ELEMENT SELECTION ---
+        const canvas = document.getElementById('fbd-canvas');
+        const ctx = canvas.getContext('2d');
+        const forceToolbox = document.getElementById('force-toolbox');
+        const toolboxInstructions = document.getElementById('toolbox-instructions');
+        const checkButton = document.getElementById('check-button');
+        const resetButton = document.getElementById('reset-button');
+        const feedbackBox = document.getElementById('feedback-box');
+        const feedbackText = document.getElementById('feedback-text');
+        const scenarioSelect = document.getElementById('scenario-select');
+        const scenarioTitle = document.getElementById('scenario-title');
+
+        // --- GLOBAL STATE ---
+        let selectedForceType = null;
+        let userForces = {}; // Now an object to hold forces for multiple objects
+        let isDrawing = false;
+        let startPoint = { x: 0, y: 0 };
+        let currentForce = null;
+        let currentScenario;
+        let selectedObjectId = null; // To track which object is selected in a multi-object system
+
+        // --- SCENARIO DEFINITIONS (Templates) ---
+        const scenarios = {
+            'box_on_surface_at_rest': {
+                title: 'A box at rest on a horizontal surface.',
+                objects: [{ id: 'box1', x: 0.5, y: 0.675, width: 0.2, height: 0.15, rotation: 0 }],
+                surface: { type: 'floor', y: 0.75, angle: 0 },
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 270, tolerance: 15 }
+                    ]
+                }
+            },
+            'box_on_incline_at_rest': {
+                title: 'A box at rest on an inclined plane (assume static friction prevents sliding).',
+                objects: [{ id: 'box1', x: 0.5, y: 0.5, width: 0.2, height: 0.15, rotation: 0 }],
+                surface: { type: 'incline', angle: 0 },
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 0, tolerance: 15 },
+                        { type: 'friction', angle: 0, tolerance: 15 }
+                    ]
+                }
+            },
+            'box_pulled_horizontally': {
+                title: 'A box is pulled horizontally on a frictionless surface.',
+                objects: [{ id: 'box1', x: 0.5, y: 0.675, width: 0.2, height: 0.15, rotation: 0 }],
+                surface: { type: 'floor', y: 0.75, angle: 0 },
+                pullDirection: 'right',
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 270, tolerance: 15 },
+                        { type: 'tension', angle: 0, tolerance: 15 }
+                    ]
+                }
+            },
+            'box_hanging_static': {
+                title: 'A box is hanging motionless from a rope.',
+                objects: [{ id: 'box1', x: 0.5, y: 0.6, width: 0.2, height: 0.15, rotation: 0 }],
+                surface: { type: 'ceiling', y: 0.2 },
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'tension', angle: 270, tolerance: 15 }
+                    ]
+                }
+            },
+            'box_static_friction': {
+                title: 'A box is pulled on a rough surface but does not move.',
+                objects: [{ id: 'box1', x: 0.5, y: 0.675, width: 0.2, height: 0.15, rotation: 0 }],
+                surface: { type: 'floor', y: 0.75, angle: 0 },
+                pullDirection: 'right',
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 270, tolerance: 15 },
+                        { type: 'tension', angle: 0, tolerance: 15 },
+                        { type: 'friction', angle: 180, tolerance: 15 }
+                    ]
+                }
+            },
+            'box_kinetic_friction': {
+                title: 'A box is sliding on a rough surface and slowing down.',
+                objects: [{ id: 'box1', x: 0.5, y: 0.675, width: 0.2, height: 0.15, rotation: 0 }],
+                surface: { type: 'floor', y: 0.75, angle: 0 },
+                motionDirection: 'right',
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 270, tolerance: 15 },
+                        { type: 'friction', angle: 180, tolerance: 15 }
+                    ]
+                }
+            },
+            'atwood_machine': {
+                title: 'An Atwood machine with a heavy left box (m1) and a light right box (m2).',
+                objects: [
+                    { id: 'box1', x: 0.42, y: 0.5, width: 0.12, height: 0.18, mass: 2 },
+                    { id: 'box2', x: 0.58, y: 0.6, width: 0.10, height: 0.15, mass: 1 }
+                ],
+                surface: { type: 'pulley', x: 0.5, y: 0.2, radius: 0.08 },
+                correctForces: {
+                    box1: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'tension', angle: 270, tolerance: 15 }
+                    ],
+                    box2: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'tension', angle: 270, tolerance: 15 }
+                    ]
+                },
+                feedback: {
+                    select: "Click on a box to analyze its free body diagram.",
+                    box1_correct: "Correct for the heavy box! It accelerates down, so gravity is stronger than tension.",
+                    box2_correct: "Correct for the light box! It accelerates up, so tension is stronger than gravity.",
+                    missingGravity: "Every object with mass has gravity acting on it.",
+                    missingTension: "What force does the rope exert on the box?",
+                    extraForce: "There is no surface, so there is no Normal force or Friction.",
+                    wrongAngleGravity: "Gravity always pulls straight down.",
+                    wrongAngleTension: "Tension from the rope always pulls straight up."
+                }
+            },
+            'stacked_boxes': {
+                title: 'Two boxes are stacked at rest on a horizontal surface.',
+                objects: [
+                    { id: 'bottom_box', x: 0.5, y: 0.675, width: 0.25, height: 0.15, mass: 2 },
+                    { id: 'top_box', x: 0.5, y: 0.525, width: 0.2, height: 0.15, mass: 1 }
+                ],
+                surface: { type: 'floor', y: 0.75, angle: 0 },
+                correctForces: {
+                    top_box: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 270, tolerance: 15, source: 'bottom_box' }
+                    ],
+                    bottom_box: [
+                        { type: 'gravity', angle: 90, tolerance: 15 },
+                        { type: 'normal', angle: 270, tolerance: 15, source: 'floor' },
+                        { type: 'normal', angle: 90, tolerance: 15, source: 'top_box' } // Downward force from top box
+                    ]
+                },
+                feedback: {
+                    select: "Click on a box to analyze its free body diagram.",
+                    top_box_correct: "Correct for the top box! Its weight is supported by the normal force from the bottom box.",
+                    bottom_box_correct: "Excellent! The floor's normal force supports both boxes, and you've included the downward push from the top box.",
+                    missingNormal: "A surface is pushing on this box. What force is it?",
+                    wrongAngleNormal: "The normal force from a horizontal surface should be perfectly vertical.",
+                    extraForce: "There are no ropes or friction in this scenario.",
+                    custom_bottom_box_missing_downward_normal: "What force does the top box exert on the bottom box?",
+                }
+            }
+        };
+        
+        // --- UTILITY & DRAWING FUNCTIONS ---
+        const forceColors = { gravity: '#ef4444', normal: '#22c55e', tension: '#3b82f6', friction: '#f97316' };
+        const forceLabels = { gravity: 'F<sub>g</sub>', normal: 'F<sub>N</sub>', tension: 'T', friction: 'f' };
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            drawScene();
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (currentScenario.surface) {
+                drawSurface();
+            }
+            // Draw boxes from bottom to top for correct layering
+            const sortedObjects = [...currentScenario.objects].reverse();
+            sortedObjects.forEach(obj => drawObject(obj));
+            drawVisualCues();
+            
+            // Draw forces for the selected object on top of everything
+            if (selectedObjectId && userForces[selectedObjectId]) {
+                 userForces[selectedObjectId].forEach(force => drawArrow(force));
+            }
+           
+            if (isDrawing && currentForce) drawArrow(currentForce);
+        }
+
+        function drawSurface() {
+            const s = currentScenario.surface;
+            ctx.save();
+            if (s.type === 'pulley') {
+                ctx.fillStyle = '#6b7280';
+                ctx.strokeStyle = '#1f2937';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(s.x * canvas.width, s.y * canvas.height, s.radius * canvas.width, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+            } else {
+                const angleRad = s.angle ? s.angle * Math.PI / 180 : 0;
+                ctx.strokeStyle = '#44403c';
+                ctx.fillStyle = '#d6d3d1';
+                ctx.lineWidth = 3;
+
+                if (s.type === 'floor') {
+                    const surfaceY = s.y * canvas.height;
+                    ctx.fillRect(0, surfaceY, canvas.width, canvas.height - surfaceY);
+                    ctx.beginPath();
+                    ctx.moveTo(0, surfaceY);
+                    ctx.lineTo(canvas.width, surfaceY);
+                    ctx.stroke();
+                } else if (s.type === 'incline') {
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height * 0.6;
+                    const length = canvas.width * 0.8;
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(angleRad);
+                    ctx.beginPath();
+                    ctx.moveTo(-length / 2, 0);
+                    ctx.lineTo(length / 2, 0);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(-length/2, 0);
+                    ctx.lineTo(length/2, 0);
+                    ctx.lineTo(length/2, canvas.height/2);
+                    ctx.lineTo(-length/2, canvas.height/2);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (s.type === 'ceiling') {
+                    const surfaceY = s.y * canvas.height;
+                    ctx.fillRect(0, 0, canvas.width, surfaceY);
+                    ctx.beginPath();
+                    ctx.moveTo(0, surfaceY);
+                    ctx.lineTo(canvas.width, surfaceY);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+        }
+
+        function drawObject(obj) {
+            const angleRad = (obj.rotation || 0) * Math.PI / 180;
+            const boxWidth = obj.width * canvas.width;
+            const boxHeight = obj.height * canvas.height;
+            const center = getObjectCenter(obj.id);
+
+            ctx.save();
+            ctx.translate(center.x, center.y);
+            ctx.rotate(angleRad);
+
+            if (obj.id === selectedObjectId) {
+                ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
+                ctx.shadowBlur = 20;
+            }
+
+            // Use different colors for stacked boxes for clarity
+            if (obj.id === 'top_box') {
+                 ctx.fillStyle = '#fca5a5'; // red-300
+                 ctx.strokeStyle = '#b91c1c'; // red-700
+            } else if (obj.id === 'bottom_box') {
+                 ctx.fillStyle = '#a5b4fc'; // indigo-300
+                 ctx.strokeStyle = '#4f46e5'; // indigo-600
+            } else {
+                 ctx.fillStyle = '#a5b4fc';
+                 ctx.strokeStyle = '#4f46e5';
+            }
+            ctx.lineWidth = 3;
+            ctx.fillRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
+            ctx.strokeRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
+            ctx.restore();
+        }
+        
+        function drawVisualCues() {
+            ctx.save();
+            ctx.strokeStyle = '#8b5cf6';
+            ctx.lineWidth = 4;
+            
+            if (currentScenario.id === 'atwood_machine') {
+                const pulley = currentScenario.surface;
+                const pCenter = { x: pulley.x * canvas.width, y: pulley.y * canvas.height };
+                const pRadius = pulley.radius * canvas.width;
+                const box1 = currentScenario.objects[0];
+                const box2 = currentScenario.objects[1];
+                const b1Center = getObjectCenter(box1.id);
+                const b2Center = getObjectCenter(box2.id);
+                const b1Top = b1Center.y - (box1.height * canvas.height / 2);
+                const b2Top = b2Center.y - (box2.height * canvas.height / 2);
+
+                ctx.beginPath();
+                ctx.moveTo(b1Center.x, b1Top);
+                ctx.lineTo(b1Center.x, pCenter.y);
+                ctx.arc(pCenter.x, pCenter.y, pRadius, Math.PI, 0, false);
+                ctx.lineTo(b2Center.x, b2Top);
+                ctx.stroke();
+            } else if (currentScenario.id === 'box_hanging_static') {
+                const boxCenter = getObjectCenter(currentScenario.objects[0].id);
+                const boxTopY = boxCenter.y - (currentScenario.objects[0].height * canvas.height / 2);
+                const ceilingY = currentScenario.surface.y * canvas.height;
+                ctx.beginPath();
+                ctx.moveTo(boxCenter.x, ceilingY);
+                ctx.lineTo(boxCenter.x, boxTopY);
+                ctx.stroke();
+            } else if (currentScenario.id === 'box_pulled_horizontally' || currentScenario.id === 'box_static_friction') {
+                const boxWidth = currentScenario.objects[0].width * canvas.width;
+                const boxCenter = getObjectCenter(currentScenario.objects[0].id);
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                if (currentScenario.pullDirection === 'right') {
+                    const startX = boxCenter.x + boxWidth / 2;
+                    ctx.moveTo(startX, boxCenter.y);
+                    ctx.lineTo(canvas.width - 20, boxCenter.y);
+                } else {
+                    const startX = boxCenter.x - boxWidth / 2;
+                    ctx.moveTo(startX, boxCenter.y);
+                    ctx.lineTo(20, boxCenter.y);
+                }
+                ctx.stroke();
+            } else if (currentScenario.id === 'box_kinetic_friction') {
+                ctx.fillStyle = 'rgba(139, 92, 246, 0.5)';
+                const yPos = currentScenario.surface.y * canvas.height + 30;
+                const arrowHeight = 20;
+                ctx.beginPath();
+                if (currentScenario.motionDirection === 'right') {
+                    ctx.moveTo(canvas.width * 0.2, yPos);
+                    ctx.lineTo(canvas.width * 0.8, yPos);
+                    ctx.lineTo(canvas.width * 0.8 - 20, yPos - arrowHeight / 2);
+                    ctx.moveTo(canvas.width * 0.8, yPos);
+                    ctx.lineTo(canvas.width * 0.8 - 20, yPos + arrowHeight / 2);
+                } else {
+                    ctx.moveTo(canvas.width * 0.8, yPos);
+                    ctx.lineTo(canvas.width * 0.2, yPos);
+                    ctx.lineTo(canvas.width * 0.2 + 20, yPos - arrowHeight / 2);
+                    ctx.moveTo(canvas.width * 0.2, yPos);
+                    ctx.lineTo(canvas.width * 0.2 + 20, yPos + arrowHeight / 2);
+                }
+                ctx.strokeStyle = '#8b5cf6';
+                ctx.lineWidth = 6;
+                ctx.stroke();
+                ctx.font = 'bold 16px Inter';
+                ctx.fillStyle = '#5b21b6';
+                ctx.textAlign = 'center';
+                ctx.fillText('motion', canvas.width / 2, yPos - 10);
+            }
+            ctx.restore();
+        }
+
+        function drawArrow(force) { 
+            const endPoint = {
+                x: force.start.x + force.length * Math.cos(force.angle * Math.PI / 180),
+                y: force.start.y + force.length * Math.sin(force.angle * Math.PI / 180)
+            };
+            ctx.save();
+            ctx.strokeStyle = forceColors[force.type];
+            ctx.fillStyle = forceColors[force.type];
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(force.start.x, force.start.y);
+            ctx.lineTo(endPoint.x, endPoint.y);
+            ctx.stroke();
+            const headlen = 15;
+            const angle = Math.atan2(endPoint.y - force.start.y, endPoint.x - force.start.x);
+            ctx.beginPath();
+            ctx.moveTo(endPoint.x, endPoint.y);
+            ctx.lineTo(endPoint.x - headlen * Math.cos(angle - Math.PI / 6), endPoint.y - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(endPoint.x - headlen * Math.cos(angle + Math.PI / 6), endPoint.y - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+            ctx.font = 'bold 18px Inter';
+            ctx.fillText(forceLabels[force.type].replace(/<\/?sub>/g, ''), endPoint.x + 10, endPoint.y + 5);
+            ctx.restore();
+        }
+
+        // --- EVENT HANDLERS & LOGIC ---
+        function getObjectCenter(objectId) {
+            const obj = currentScenario.objects.find(o => o.id === objectId);
+            if (!obj) return null;
+
+            if (currentScenario.surface && currentScenario.surface.type === 'incline') {
+                return { x: canvas.width / 2, y: canvas.height * 0.6 - (obj.height * canvas.height) / 2 - 3 };
+            } else {
+                return { x: obj.x * canvas.width, y: obj.y * canvas.height };
+            }
+        }
+
+        forceToolbox.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            if (currentScenario.objects.length > 1 && !selectedObjectId) {
+                setFeedback('error', 'Please select a box to analyze before choosing a force.');
+                return;
+            }
+
+            const forceType = button.dataset.force;
+            if (selectedForceType === forceType) {
+                selectedForceType = null;
+                button.classList.remove('selected');
+            } else {
+                selectedForceType = forceType;
+                document.querySelectorAll('.force-button').forEach(btn => btn.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+            if (selectedObjectId) {
+                setFeedback('neutral', `Selected ${selectedForceType ? forceType : 'nothing'}. Click and drag on the box.`);
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Handle box selection ONLY if no force is active
+            if (currentScenario.objects.length > 1 && !isDrawing && !selectedForceType) {
+                for (const obj of currentScenario.objects) {
+                    const center = getObjectCenter(obj.id);
+                    const width = obj.width * canvas.width;
+                    const height = obj.height * canvas.height;
+                    if (mouseX > center.x - width / 2 && mouseX < center.x + width / 2 &&
+                        mouseY > center.y - height / 2 && mouseY < center.y + height / 2) {
+                        
+                        selectedObjectId = obj.id;
+                        setFeedback('neutral', `Analyzing ${obj.id.replace('_', ' ')}. Select a force to draw.`);
+                        toolboxInstructions.textContent = `Drawing forces for ${obj.id.replace('_', ' ')}.`;
+                        drawScene();
+                        return; // Exit after selecting an object
+                    }
+                }
+            }
+
+            // Handle starting to draw a force
+            if (!selectedObjectId || !selectedForceType) return;
+            
+            isDrawing = true;
+            startPoint = getObjectCenter(selectedObjectId);
+            currentForce = { type: selectedForceType, start: startPoint, length: 0, angle: 0 };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const dx = mouseX - startPoint.x;
+            const dy = mouseY - startPoint.y;
+            currentForce.length = Math.sqrt(dx * dx + dy * dy);
+            currentForce.angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            drawScene();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if (currentForce.length > 20) {
+                 if (!userForces[selectedObjectId]) userForces[selectedObjectId] = [];
+                 userForces[selectedObjectId].push(currentForce);
+            }
+            currentForce = null;
+            drawScene();
+        });
+
+        function resetDiagram() {
+            userForces = {};
+            currentScenario.objects.forEach(obj => { userForces[obj.id] = []; });
+            selectedObjectId = currentScenario.objects.length === 1 ? currentScenario.objects[0].id : null;
+            
+            selectedForceType = null;
+            document.querySelectorAll('.force-button').forEach(btn => btn.classList.remove('selected'));
+
+            if (currentScenario.objects.length > 1) {
+                setFeedback('neutral', currentScenario.feedback.select || 'Click a box to begin.');
+                toolboxInstructions.textContent = 'First, select an object on the canvas.';
+            } else {
+                setFeedback('neutral', 'Diagram reset. Select a force to begin.');
+                toolboxInstructions.textContent = 'Select a force, then click and drag on the box.';
+            }
+            drawScene();
+        }
+
+        resetButton.addEventListener('click', resetDiagram);
+        checkButton.addEventListener('click', checkAnswer);
+        scenarioSelect.addEventListener('change', (e) => loadScenario(e.target.value));
+
+        function loadScenario(scenarioId) {
+            currentScenario = JSON.parse(JSON.stringify(scenarios[scenarioId]));
+            currentScenario.id = scenarioId;
+
+            if (scenarioId === 'box_on_incline_at_rest') {
+                const randomAngle = Math.floor(Math.random() * (45 - 15 + 1)) + 15; // Range 15-45 for friction to hold
+                currentScenario.surface.angle = randomAngle;
+                currentScenario.objects[0].rotation = randomAngle;
+                currentScenario.title = `A box at rest on a ${randomAngle}° inclined plane.`;
+                currentScenario.correctForces.box1.find(f => f.type === 'normal').angle = (randomAngle + 270) % 360;
+                currentScenario.correctForces.box1.find(f => f.type === 'friction').angle = (randomAngle + 180) % 360;
+            } else if (scenarioId === 'box_pulled_horizontally' || scenarioId === 'box_static_friction') {
+                const pullDirection = Math.random() < 0.5 ? 'left' : 'right';
+                currentScenario.pullDirection = pullDirection;
+                const tensionForce = currentScenario.correctForces.box1.find(f => f.type === 'tension');
+                const frictionForce = currentScenario.correctForces.box1.find(f => f.type === 'friction');
+                
+                if (pullDirection === 'left') {
+                    tensionForce.angle = 180;
+                    if(frictionForce) frictionForce.angle = 0;
+                    currentScenario.title = currentScenario.title.replace('pulled', 'pulled to the left');
+                } else {
+                    tensionForce.angle = 0;
+                    if(frictionForce) frictionForce.angle = 180;
+                    currentScenario.title = currentScenario.title.replace('pulled', 'pulled to the right');
+                }
+            } else if (scenarioId === 'box_kinetic_friction') {
+                const motionDirection = Math.random() < 0.5 ? 'left' : 'right';
+                currentScenario.motionDirection = motionDirection;
+                const frictionForce = currentScenario.correctForces.box1.find(f => f.type === 'friction');
+                if (motionDirection === 'left') {
+                    frictionForce.angle = 0;
+                    currentScenario.title = currentScenario.title.replace('sliding', 'sliding to the left');
+                } else {
+                    frictionForce.angle = 180;
+                    currentScenario.title = currentScenario.title.replace('sliding', 'sliding to the right');
+                }
+            }
+            
+            scenarioTitle.textContent = currentScenario.title;
+            resetDiagram();
+        }
+
+        function checkAnswer() {
+            if (!selectedObjectId) {
+                setFeedback('error', 'Please select a box to analyze first.');
+                return;
+            }
+
+            const correctDefs = currentScenario.correctForces[selectedObjectId];
+            const drawnForces = userForces[selectedObjectId] || [];
+            let unmatchedDrawnForces = [...drawnForces];
+            let allCorrectForcesFound = true;
+
+            // First pass: try to match and remove all correct forces from a temporary list
+            for (const correctForce of correctDefs) {
+                let foundMatchIndex = -1;
+
+                foundMatchIndex = unmatchedDrawnForces.findIndex(drawn => {
+                    if (drawn.type !== correctForce.type) return false;
+
+                    // FIX: Normalize the drawn angle *before* any directional checks.
+                    const normalizedDrawnAngle = (drawn.angle % 360 + 360) % 360;
+
+                    // Special direction check for stacked box normal forces
+                    if (currentScenario.id === 'stacked_boxes' && correctForce.type === 'normal') {
+                        const isDrawnUpward = normalizedDrawnAngle > 225 && normalizedDrawnAngle < 315;
+                        const isCorrectUpward = correctForce.angle > 225 && correctForce.angle < 315;
+                        if (isDrawnUpward !== isCorrectUpward) return false;
+                    }
+                    
+                    const diff = 180 - Math.abs(Math.abs(normalizedDrawnAngle - correctForce.angle) - 180);
+                    return diff <= correctForce.tolerance;
+                });
+
+                if (foundMatchIndex !== -1) {
+                    // Match found, remove it from the pool for the next iteration
+                    unmatchedDrawnForces.splice(foundMatchIndex, 1);
+                } else {
+                    // A required force was not found among the drawn forces.
+                    allCorrectForcesFound = false;
+                }
+            }
+
+            // --- Check results and provide feedback ---
+
+            // The only condition for success: all correct forces were found and there are no extras.
+            if (allCorrectForcesFound && unmatchedDrawnForces.length === 0) {
+                const correctFeedbackKey = `${selectedObjectId}_correct`;
+                setFeedback('success', currentScenario.feedback[correctFeedbackKey] || "Correct!");
+                return;
+            }
+
+            // Check for extra forces (forces remaining after all correct ones were matched)
+            if (unmatchedDrawnForces.length > 0) {
+                setFeedback('error', currentScenario.feedback.extraForce);
+                return;
+            }
+
+            // If we are here, it means a required force is missing or at the wrong angle.
+            // We need to find the first required force that wasn't satisfied.
+            for (const correctForce of correctDefs) {
+                 const hasMatch = drawnForces.some(drawn => {
+                    if (drawn.type !== correctForce.type) return false;
+
+                    // FIX: Normalize the drawn angle here as well for consistency.
+                    const normalizedDrawnAngle = (drawn.angle % 360 + 360) % 360;
+
+                    if (currentScenario.id === 'stacked_boxes' && correctForce.type === 'normal') {
+                        const isDrawnUpward = normalizedDrawnAngle > 225 && normalizedDrawnAngle < 315;
+                        const isCorrectUpward = correctForce.angle > 225 && correctForce.angle < 315;
+                        if (isDrawnUpward !== isCorrectUpward) return false;
+                    }
+
+                    const diff = 180 - Math.abs(Math.abs(normalizedDrawnAngle - correctForce.angle) - 180);
+                    return diff <= correctForce.tolerance;
+                });
+
+                if (!hasMatch) {
+                    // This correct force is the one that's missing or wrong.
+                    // Special check for the downward normal on the bottom box for a more specific message.
+                    if (currentScenario.id === 'stacked_boxes' && selectedObjectId === 'bottom_box' && correctForce.type === 'normal' && correctForce.angle < 180) {
+                        setFeedback('error', currentScenario.feedback.custom_bottom_box_missing_downward_normal);
+                        return;
+                    }
+
+                    // Is the force type present at all? If so, the angle must be wrong.
+                    const hasForceTypeOfAnyAngle = drawnForces.some(d => d.type === correctForce.type);
+                    if (hasForceTypeOfAnyAngle) {
+                        const feedbackKey = `wrongAngle${correctForce.type.charAt(0).toUpperCase() + correctForce.type.slice(1)}`;
+                        setFeedback('error', currentScenario.feedback[feedbackKey]);
+                    } else {
+                        const feedbackKey = `missing${correctForce.type.charAt(0).toUpperCase() + correctForce.type.slice(1)}`;
+                        setFeedback('error', currentScenario.feedback[feedbackKey]);
+                    }
+                    return;
+                }
+            }
+            
+            // Fallback for any other logic errors
+            setFeedback('error', "Something is not quite right. Check the number and direction of your forces.");
+        }
+
+        function setFeedback(type, message) {
+            feedbackBox.classList.remove('bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-blue-100', 'text-blue-800');
+            switch (type) {
+                case 'success': feedbackBox.classList.add('bg-green-100', 'text-green-800'); break;
+                case 'error': feedbackBox.classList.add('bg-red-100', 'text-red-800'); break;
+                default: feedbackBox.classList.add('bg-blue-100', 'text-blue-800'); break;
+            }
+            feedbackText.textContent = message;
+        }
+
+        // --- INITIALIZATION ---
+        window.addEventListener('resize', resizeCanvas);
+        
+        const baseFeedback = {
+            correct: "Correct! All forces are present and correctly oriented.",
+            missingGravity: "Something is missing. What force pulls everything towards the center of the Earth?",
+            missingNormal: "A surface is pushing on this box. What force is it?",
+            missingTension: "A force is pulling the box. What is it?",
+            missingFriction: "There is friction in this scenario. What force is it?",
+            extraForce: "You've added an unnecessary force.",
+            wrongAngleGravity: "Check the direction of gravity. It should always point straight down.",
+            wrongAngleNormal: "The normal force should be perpendicular to the surface.",
+            wrongAngleTension: "Check the direction of the pull.",
+            wrongAngleFriction: "Friction always opposes motion or attempted motion."
+        };
+
+        for (const key in scenarios) {
+            if (scenarios.hasOwnProperty(key)) {
+                scenarios[key].feedback = { ...baseFeedback, ...scenarios[key].feedback };
+                scenarios[key].id = key;
+                if (scenarios[key].objects.length === 1 && !scenarios[key].correctForces.box1 && !scenarios[key].correctForces[scenarios[key].objects[0].id]) {
+                    const singleObjectId = scenarios[key].objects[0].id;
+                    scenarios[key].correctForces = {[singleObjectId]: scenarios[key].correctForces};
+                }
+            }
+        }
+        loadScenario(scenarioSelect.value);
+    </script>
+</body>
+</html>
+
+
