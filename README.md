@@ -2,3 +2,5 @@
 - vector_exercise.html - practice vector operations
 - SHMbob2.html - simple harmonic motion illustration with sliders for parameters
 - wave.html - sinusoidal wave demonstration
+- rolling.html - properties in a freely rolling wheel
+- torque-explorer.html - see how torque is calculated in various settings
