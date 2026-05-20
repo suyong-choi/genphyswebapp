@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermodynamic Processes in an Ideal Gas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background-color: #fff;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+        .tab-btn {
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+            background-color: #e0e7ff;
+            border-radius: 0.375rem 0.375rem 0 0;
+        }
+        .tab-btn:hover:not(.active) {
+            background-color: #f3f4f6;
+            border-radius: 0.375rem 0.375rem 0 0;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .slider-container label {
+            width: 150px;
+            font-weight: 500;
+        }
+        .slider-container input[type="range"] {
+            flex-grow: 1;
+            margin: 0 1rem;
+        }
+        .slider-container span {
+            width: 50px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .control-panel {
+            background: #fff;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Particle animation specific styles */
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background-color: #ff4757;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="p-6 h-screen flex flex-col">
+
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Thermodynamic Processes in an Ideal Gas</h1>
+        <p class="text-gray-600">Freshman Physics Interactive Demonstration</p>
+        <p class="text-sm text-gray-500 mt-1">By Suyong Choi (Korea University)</p>
+    </header>
+
+    <div class="flex flex-wrap gap-2 mb-4 border-b border-gray-300 px-4">
+        <button class="tab-btn active" data-tab="isochoric">Constant Volume (Isochoric)</button>
+        <button class="tab-btn" data-tab="isobaric">Constant Pressure (Isobaric)</button>
+        <button class="tab-btn" data-tab="isothermal">Constant Temp (Isothermal)</button>
+        <button class="tab-btn" data-tab="adiabatic">Adiabatic</button>
+        <button class="tab-btn" data-tab="cyclic">Cyclic Process</button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow">
+        
+        <!-- Left Column: Simulation and Controls -->
+        <div class="flex flex-col gap-6">
+            <!-- Cylinder Simulation Canvas -->
+            <div class="canvas-container relative" id="cylinder-container">
+                <canvas id="cylinderCanvas"></canvas>
+                <!-- Overlay for heat flow / work arrows -->
+                <div id="animation-overlay" class="absolute inset-0 pointer-events-none"></div>
+            </div>
+
+            <!-- Controls -->
+            <div class="control-panel">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold" id="process-title">Constant Volume Process</h2>
+                    <div>
+                        <button id="btn-play" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mr-2 transition-colors">Play</button>
+                        <button id="btn-reset" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors">Reset</button>
+                    </div>
+                </div>
+                
+                <div id="controls-area">
+                    <!-- Dynamic controls will be injected here -->
+                </div>
+                
+                <div class="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-800" id="process-description">
+                    Description...
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Graphs -->
+        <div class="flex flex-col gap-6">
+            <!-- P-V Diagram -->
+            <div class="bg-white p-4 rounded-lg shadow h-[400px]">
+                <h3 class="text-lg font-semibold mb-2 text-center">P-V Diagram</h3>
+                <div class="relative h-[330px]">
+                    <canvas id="pvChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Time Evolution Graphs -->
+            <div class="bg-white p-4 rounded-lg shadow h-[400px]">
+                <h3 class="text-lg font-semibold mb-2 text-center">Energy vs. Time</h3>
+                <div class="relative h-[330px]">
+                    <canvas id="energyChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Thermodynamics State & Constants ---
+        const R = 8.314; // Ideal gas constant (J/(mol*K))
+        const n = 1;     // Number of moles
+        const Cv = (3/2) * R; // Monatomic ideal gas constant volume heat capacity
+        const Cp = Cv + R;    // Constant pressure heat capacity
+        const gamma = Cp / Cv;
+
+        // Base state (ensuring P * V = n * R * T exactly)
+        const initialState = {
+            P: 100000, // Pa
+            V: (1 * 8.314 * 300) / 100000, // m^3 (approx 0.0249 to satisfy ideal gas law)
+            T: 300     // K
+        };
+        
+        let currentState = { ...initialState };
+        let history = { t: [], P: [], V: [], T: [], W: [], Q: [], dU: [] };
+        
+        // Simulation variables
+        let animationId;
+        let isPlaying = false;
+        let currentTime = 0;
+        const totalDuration = 5; // seconds
+        let currentTab = 'isochoric';
+        
+        // Target values based on sliders
+        let targetHeat = 5000; // J for isochoric/isobaric
+        let targetVolumeFactor = 2; // for isothermal/adiabatic
+        let targetCycleTemp = 600; // for cyclic
+
+        // --- Chart Setup ---
+        // Register necessary Chart.js plugins or just use defaults
+        Chart.defaults.font.family = 'Inter';
+        Chart.defaults.color = '#4b5563';
+
+        const pvCtx = document.getElementById('pvChart').getContext('2d');
+        const energyCtx = document.getElementById('energyChart').getContext('2d');
+
+        // P-V Diagram
+        const pvChart = new Chart(pvCtx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    {
+                        label: 'Path',
+                        data: [],
+                        borderColor: '#2563eb',
+                        backgroundColor: '#2563eb',
+                        borderWidth: 2,
+                        showLine: true,
+                        pointRadius: 0,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Current State',
+                        data: [{x: initialState.V, y: initialState.P / 1000}],
+                        borderColor: '#ef4444',
+                        backgroundColor: '#ef4444',
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    },
+                    {
+                         label: 'Work Area',
+                         data: [],
+                         backgroundColor: 'rgba(37, 99, 235, 0.2)',
+                         borderColor: 'transparent',
+                         showLine: true,
+                         fill: 'origin',
+                         pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        title: { display: true, text: 'Volume (m³)' },
+                        min: 0,
+                        max: 0.08
+                    },
+                    y: {
+                        title: { display: true, text: 'Pressure (kPa)' },
+                        min: 0,
+                        max: 400
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `V: ${ctx.parsed.x.toFixed(3)} m³, P: ${ctx.parsed.y.toFixed(0)} kPa`
+                        }
+                    }
+                }
+            }
+        });
+
+        // Energy vs Time Graph
+        const energyChart = new Chart(energyCtx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    { label: 'Work (W)', data: [], borderColor: '#f59e0b', backgroundColor: '#f59e0b', tension: 0.2, pointRadius: 0 },
+                    { label: 'Heat (Q)', data: [], borderColor: '#ef4444', backgroundColor: '#ef4444', tension: 0.2, pointRadius: 0 },
+                    { label: 'Δ Internal Energy (ΔU)', data: [], borderColor: '#10b981', backgroundColor: '#10b981', tension: 0.2, pointRadius: 0 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                scales: {
+                    x: { 
+                        type: 'linear',
+                        title: { display: true, text: 'Time (s)' }, 
+                        min: 0, 
+                        max: totalDuration,
+                        ticks: {
+                            maxTicksLimit: 6, // Show fewer ticks (e.g., 0, 1, 2, 3, 4, 5)
+                            callback: function(value) {
+                                return value.toFixed(1); // Limit to 1 decimal place
+                            }
+                        }
+                    },
+                    y: { title: { display: true, text: 'Energy (Joules)' } }
+                }
+            }
+        });
+
+        // --- Cylinder Canvas Setup ---
+        const canvas = document.getElementById('cylinderCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let canvasW, canvasH;
+        
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            canvasW = canvas.width;
+            canvasH = canvas.height;
+            drawCylinder();
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+
+        // Particle system for gas visualization
+        let particles = [];
+        const numParticles = 100;
+        
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < numParticles; i++) {
+                particles.push({
+                    x: Math.random(), // relative 0-1
+                    y: Math.random(), // relative 0-1
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2
+                });
+            }
+        }
+        initParticles();
+
+        function drawCylinder() {
+            ctx.clearRect(0, 0, canvasW, canvasH);
+            
+            const cylWidth = canvasW * 0.4;
+            const cylMaxHeight = canvasH * 0.7;
+            const cylX = (canvasW - cylWidth) / 2;
+            const cylBottomY = canvasH * 0.85;
+            
+            // Map Volume to height
+            // Let max volume (0.08) correspond to cylMaxHeight
+            const maxV = 0.08;
+            const currentH = (currentState.V / maxV) * cylMaxHeight;
+            const pistonY = cylBottomY - currentH;
+
+            // Draw thermal reservoir
+            const resHeight = canvasH * 0.15;
+            const resY = cylBottomY;
+            
+            // Reservoir color based on temperature
+            // Map T=300 to blueish, T=1000 to reddish
+            let rTemp = Math.min(255, Math.max(0, (currentState.T - 200) * 0.5));
+            let bTemp = 255 - rTemp;
+            
+            // If adiabatic, reservoir is insulated (gray)
+            if (currentTab === 'adiabatic') {
+                ctx.fillStyle = '#9ca3af';
+            } else {
+                ctx.fillStyle = `rgb(${rTemp}, 50, ${bTemp})`;
+            }
+            
+            ctx.fillRect(cylX - 20, resY, cylWidth + 40, resHeight);
+            
+            // Reservoir text
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Inter';
+            ctx.textAlign = 'center';
+            if (currentTab === 'adiabatic') {
+                ctx.fillText("Insulated Base", canvasW/2, resY + resHeight/2 + 5);
+            } else {
+                ctx.fillText(`Reservoir T ≈ ${Math.round(currentState.T)}K`, canvasW/2, resY + resHeight/2 + 5);
+            }
+
+            // Draw cylinder walls
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#4b5563';
+            ctx.beginPath();
+            ctx.moveTo(cylX, cylBottomY - cylMaxHeight - 20);
+            ctx.lineTo(cylX, cylBottomY);
+            ctx.lineTo(cylX + cylWidth, cylBottomY);
+            ctx.lineTo(cylX + cylWidth, cylBottomY - cylMaxHeight - 20);
+            ctx.stroke();
+
+            // Insulators on sides for all processes
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = '#9ca3af';
+            ctx.beginPath();
+            ctx.moveTo(cylX - 5, cylBottomY - cylMaxHeight - 20);
+            ctx.lineTo(cylX - 5, cylBottomY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cylX + cylWidth + 5, cylBottomY - cylMaxHeight - 20);
+            ctx.lineTo(cylX + cylWidth + 5, cylBottomY);
+            ctx.stroke();
+
+            // Draw Gas background color based on T
+            ctx.fillStyle = `rgba(${rTemp}, 100, ${bTemp}, 0.2)`;
+            ctx.fillRect(cylX, pistonY, cylWidth, currentH);
+
+            // Draw particles
+            // Particle speed based on T
+            const speedFactor = Math.sqrt(currentState.T / 300);
+            
+            ctx.fillStyle = '#ef4444';
+            particles.forEach(p => {
+                // Update position
+                p.x += p.vx * speedFactor * 0.01;
+                p.y += p.vy * speedFactor * 0.01;
+                
+                // Bounce off walls (relative coordinates 0-1)
+                if (p.x < 0) { p.x = 0; p.vx *= -1; }
+                if (p.x > 1) { p.x = 1; p.vx *= -1; }
+                if (p.y < 0) { p.y = 0; p.vy *= -1; }
+                if (p.y > 1) { p.y = 1; p.vy *= -1; }
+                
+                // Map to actual coordinates
+                const px = cylX + p.x * cylWidth;
+                const py = pistonY + p.y * currentH;
+                
+                ctx.beginPath();
+                ctx.arc(px, py, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Piston
+            ctx.fillStyle = '#6b7280';
+            ctx.fillRect(cylX + 2, pistonY - 15, cylWidth - 4, 15);
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(canvasW/2 - 5, pistonY - 50, 10, 35); // Piston rod
+            
+            // Draw weights if pressure is high or changing
+            if (currentTab === 'isobaric') {
+                 drawWeight(canvasW/2, pistonY - 50, "M");
+            } else if (currentTab === 'isothermal' || currentTab === 'adiabatic') {
+                 // Weight changes to allow expansion/compression
+                 let pRatio = currentState.P / initialState.P;
+                 let weightLabel = pRatio > 1.1 ? "Heavy" : (pRatio < 0.9 ? "Light" : "M");
+                 drawWeight(canvasW/2, pistonY - 50, weightLabel, pRatio);
+            } else if (currentTab === 'isochoric') {
+                 // Fixed piston
+                 ctx.strokeStyle = '#ef4444';
+                 ctx.lineWidth = 3;
+                 ctx.beginPath();
+                 ctx.moveTo(cylX - 10, pistonY - 15);
+                 ctx.lineTo(cylX + 10, pistonY - 15);
+                 ctx.moveTo(cylX + cylWidth - 10, pistonY - 15);
+                 ctx.lineTo(cylX + cylWidth + 10, pistonY - 15);
+                 ctx.stroke();
+                 
+                 ctx.fillStyle = '#ef4444';
+                 ctx.font = '12px Inter';
+                 ctx.fillText("Locked", cylX - 25, pistonY - 5);
+                 ctx.fillText("Locked", cylX + cylWidth + 25, pistonY - 5);
+            }
+
+            // Stats overlay
+            ctx.fillStyle = '#1f2937';
+            ctx.font = 'bold 14px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText(`P = ${(currentState.P / 1000).toFixed(1)} kPa`, 10, 20);
+            ctx.fillText(`V = ${(currentState.V * 1000).toFixed(1)} L`, 10, 40);
+            ctx.fillText(`T = ${currentState.T.toFixed(1)} K`, 10, 60);
+            
+            drawVisualEffects(cylX, cylWidth, cylBottomY, currentH, pistonY);
+        }
+        
+        function drawWeight(x, y, label, scale = 1) {
+            ctx.fillStyle = '#4b5563';
+            let w = 40 * Math.max(0.5, Math.min(2, scale));
+            let h = 20 * Math.max(0.5, Math.min(2, scale));
+            ctx.fillRect(x - w/2, y - h, w, h);
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, x, y - h/2 + 4);
+        }
+
+        let arrowOffset = 0;
+        function drawVisualEffects(cylX, cylWidth, cylBottomY, currentH, pistonY) {
+            arrowOffset = (arrowOffset + 1) % 20;
+            
+            // Helper to draw a thick, solid arrow
+            function drawThickArrow(x, y, isUp, color, text) {
+                const length = 35;
+                const width = 10;
+                const headWidth = 24;
+                const headLength = 16;
+                
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                
+                if (isUp) {
+                    ctx.moveTo(x - width/2, y);
+                    ctx.lineTo(x - width/2, y - length + headLength);
+                    ctx.lineTo(x - headWidth/2, y - length + headLength);
+                    ctx.lineTo(x, y - length); // tip
+                    ctx.lineTo(x + headWidth/2, y - length + headLength);
+                    ctx.lineTo(x + width/2, y - length + headLength);
+                    ctx.lineTo(x + width/2, y);
+                } else {
+                    ctx.moveTo(x - width/2, y);
+                    ctx.lineTo(x - width/2, y + length - headLength);
+                    ctx.lineTo(x - headWidth/2, y + length - headLength);
+                    ctx.lineTo(x, y + length); // tip
+                    ctx.lineTo(x + headWidth/2, y + length - headLength);
+                    ctx.lineTo(x + width/2, y + length - headLength);
+                    ctx.lineTo(x + width/2, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                if (text) {
+                    ctx.fillStyle = color;
+                    ctx.font = 'bold 22px Inter';
+                    ctx.fillText(text, x + 25, y + (isUp ? -10 : 25));
+                }
+            }
+
+            // Heat flow arrows
+            if (history.t.length > 1 && currentTab !== 'adiabatic') {
+                const lastQ = history.Q[history.Q.length - 2] || 0;
+                const currQ = history.Q[history.Q.length - 1];
+                const dQ = currQ - lastQ;
+                
+                if (Math.abs(dQ) > 0.1 && isPlaying) {
+                    const color = dQ > 0 ? 'rgba(239, 68, 68, 0.9)' : 'rgba(59, 130, 246, 0.9)'; // Red for heat in, Blue for out
+                    const numArrows = 3;
+                    const spacing = cylWidth / (numArrows + 1);
+                    
+                    for (let i = 1; i <= numArrows; i++) {
+                        let x = cylX + i * spacing;
+                        let y = cylBottomY - 5;
+                        let isUp = dQ > 0;
+                        let animY = isUp ? y - arrowOffset : y + arrowOffset - 20;
+                        
+                        drawThickArrow(x, animY, isUp, color);
+                    }
+                }
+            }
+            
+            // Work arrows
+            if (history.t.length > 1 && currentTab !== 'isochoric') {
+                const lastW = history.W[history.W.length - 2] || 0;
+                const currW = history.W[history.W.length - 1];
+                const dW = currW - lastW;
+                
+                if (Math.abs(dW) > 0.1 && isPlaying) {
+                    const color = dW > 0 ? 'rgba(245, 158, 11, 0.9)' : 'rgba(139, 92, 246, 0.9)'; // Orange out, Purple in
+                    let x = cylX + cylWidth + 20;
+                    let y = pistonY - 20;
+                    let isUp = dW > 0;
+                    let animY = isUp ? y - arrowOffset : y + arrowOffset - 20;
+                    
+                    drawThickArrow(x, animY, isUp, color, 'W');
+                }
+            }
+        }
+
+        // --- Process Logic ---
+        
+        function calculateProcess(t, dt) {
+            const progress = t / totalDuration; // 0 to 1
+            let P, V, T, W, Q, dU;
+            
+            // Helper function to get exact states for smooth interpolation
+            // We use interpolation to generate the path over time
+            
+            if (currentTab === 'isochoric') {
+                // V = const. Q = nCv(Tf - Ti). P = nRT/V
+                V = initialState.V;
+                Q = targetHeat * progress;
+                dT = Q / (n * Cv);
+                T = initialState.T + dT;
+                P = (n * R * T) / V;
+                W = 0;
+                dU = Q;
+            } 
+            else if (currentTab === 'isobaric') {
+                // P = const. Q = nCp(Tf - Ti). V = nRT/P
+                P = initialState.P;
+                Q = targetHeat * progress;
+                dT = Q / (n * Cp);
+                T = initialState.T + dT;
+                V = (n * R * T) / P;
+                W = P * (V - initialState.V);
+                dU = Q - W;
+            }
+            else if (currentTab === 'isothermal') {
+                // T = const. dU = 0. Q = W = nRT ln(Vf/Vi)
+                T = initialState.T;
+                let targetV = initialState.V * targetVolumeFactor;
+                // Interpolate volume exponentially or linearly. Let's do linearly for simplicity in time
+                V = initialState.V + (targetV - initialState.V) * progress;
+                P = (n * R * T) / V;
+                W = n * R * T * Math.log(V / initialState.V);
+                Q = W;
+                dU = 0;
+            }
+            else if (currentTab === 'adiabatic') {
+                // Q = 0. P*V^gamma = const. T*V^(gamma-1) = const
+                Q = 0;
+                let targetV = initialState.V * targetVolumeFactor;
+                V = initialState.V + (targetV - initialState.V) * progress;
+                let constPV = initialState.P * Math.pow(initialState.V, gamma);
+                P = constPV / Math.pow(V, gamma);
+                T = (P * V) / (n * R);
+                
+                // W = -dU = -nCv(T - Ti)
+                dU = n * Cv * (T - initialState.T);
+                W = -dU;
+            }
+            else if (currentTab === 'cyclic') {
+                // Let's define a simple Stirling engine like cycle (Isochoric heat, Isothermal exp, Isochoric cool, Isothermal comp)
+                // For simplicity in a single tab, we'll parameterize a circular or distinct path.
+                // Let's do an Otto cycle approximation or just a simple rectangle (Isobaric expansion, isochoric drop, isobaric comp, isochoric rise)
+                
+                // Rectangle cycle:
+                // 1. (0-0.25) Isobaric expansion at P_high
+                // 2. (0.25-0.5) Isochoric cooling at V_high
+                // 3. (0.5-0.75) Isobaric compression at P_low
+                // 4. (0.75-1.0) Isochoric heating at V_low
+                
+                let P_high = initialState.P * 1.5;
+                let V_low = initialState.V;
+                let V_high = initialState.V * 2.0;
+                let P_low = initialState.P * 0.8;
+                
+                // Adjust initial state for cycle visual consistency
+                if (t===0) {
+                     // We reset start point but keep it continuous for the draw loop
+                     // Actually, let's just make it a parameterized circle in PV space to look cool and simple
+                     let Vc = (V_high + V_low) / 2;
+                     let Pc = (P_high + P_low) / 2;
+                     let dV = (V_high - V_low) / 2;
+                     let dP = (P_high - P_low) / 2;
+                     
+                     // t=0 starts at top (P_high, Vc)
+                     let angle = (progress * 2 * Math.PI) + Math.PI/2; 
+                     
+                     V = Vc + dV * Math.cos(angle);
+                     P = Pc + dP * Math.sin(angle);
+                     T = (P * V) / (n * R);
+                     
+                     // Numerical integration for W, Q, dU
+                     // W = integral P dV
+                     if (t === 0) {
+                         W = 0; Q = 0; dU = 0;
+                         history.cyclePrevV = V;
+                         history.cyclePrevT = T;
+                     } else {
+                         let step_dW = P * (V - history.cyclePrevV);
+                         let step_dU = n * Cv * (T - history.cyclePrevT);
+                         let step_dQ = step_dU + step_dW;
+                         
+                         W = history.W[history.W.length-1] + step_dW;
+                         dU = history.dU[history.dU.length-1] + step_dU;
+                         Q = history.Q[history.Q.length-1] + step_dQ;
+                         
+                         history.cyclePrevV = V;
+                         history.cyclePrevT = T;
+                     }
+                } else {
+                     let Vc = (V_high + V_low) / 2;
+                     let Pc = (P_high + P_low) / 2;
+                     let dV = (V_high - V_low) / 2;
+                     let dP = (P_high - P_low) / 2;
+                     let angle = (progress * 2 * Math.PI) + Math.PI/2;
+                     
+                     V = Vc + dV * Math.cos(angle);
+                     P = Pc + dP * Math.sin(angle);
+                     T = (P * V) / (n * R);
+                     
+                     let step_dW = P * (V - history.cyclePrevV);
+                     let step_dU = n * Cv * (T - history.cyclePrevT);
+                     let step_dQ = step_dU + step_dW;
+                     
+                     W = history.W[history.W.length-1] + step_dW;
+                     dU = history.dU[history.dU.length-1] + step_dU;
+                     Q = history.Q[history.Q.length-1] + step_dQ;
+                     
+                     history.cyclePrevV = V;
+                     history.cyclePrevT = T;
+                }
+            }
+
+            currentState = { P, V, T };
+            return { P, V, T, W, Q, dU };
+        }
+
+        let lastTime = 0;
+        function updateLoop(timestamp) {
+            if (!isPlaying) return;
+            
+            if (!lastTime) lastTime = timestamp;
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            
+            currentTime += dt;
+            
+            if (currentTime > totalDuration) {
+                currentTime = totalDuration;
+                isPlaying = false;
+                document.getElementById('btn-play').textContent = 'Play';
+                document.getElementById('btn-play').classList.replace('bg-yellow-500', 'bg-green-500');
+            }
+            
+            const vals = calculateProcess(currentTime, dt);
+            
+            history.t.push(currentTime);
+            history.P.push(vals.P / 1000); // kPa for graph
+            history.V.push(vals.V);
+            history.T.push(vals.T);
+            history.W.push(vals.W);
+            history.Q.push(vals.Q);
+            history.dU.push(vals.dU);
+            
+            updateGraphs();
+            drawCylinder();
+            
+            if (isPlaying) {
+                animationId = requestAnimationFrame(updateLoop);
+            }
+        }
+
+        function updateGraphs() {
+            // Update PV Chart
+            pvChart.data.datasets[0].data = history.V.map((v, i) => ({x: v, y: history.P[i]}));
+            pvChart.data.datasets[1].data = [{x: currentState.V, y: currentState.P / 1000}];
+            
+            // Work area
+            if (currentTab !== 'isochoric') {
+                pvChart.data.datasets[2].data = history.V.map((v, i) => ({x: v, y: history.P[i]}));
+            } else {
+                pvChart.data.datasets[2].data = [];
+            }
+            
+            pvChart.update();
+            
+            // Update Energy Chart
+            energyChart.data.datasets[0].data = history.t.map((t, i) => ({x: t, y: history.W[i]}));
+            energyChart.data.datasets[1].data = history.t.map((t, i) => ({x: t, y: history.Q[i]}));
+            energyChart.data.datasets[2].data = history.t.map((t, i) => ({x: t, y: history.dU[i]}));
+            
+            // Adjust y-axis scale dynamically
+            const allVals = [...history.W, ...history.Q, ...history.dU];
+            if (allVals.length > 0) {
+                const maxVal = Math.max(...allVals, 1000);
+                const minVal = Math.min(...allVals, -1000);
+                energyChart.options.scales.y.max = maxVal * 1.2;
+                energyChart.options.scales.y.min = minVal * 1.2;
+            }
+            
+            energyChart.update();
+        }
+
+        // --- Controls & UI ---
+        
+        const controlsArea = document.getElementById('controls-area');
+        const processDescription = document.getElementById('process-description');
+        const processTitle = document.getElementById('process-title');
+
+        const processConfigs = {
+            'isochoric': {
+                title: 'Constant Volume Process',
+                desc: 'Volume remains constant (ΔV = 0). Therefore, Work (W) = 0. Heat added goes entirely into changing internal energy (Q = ΔU). Heating increases pressure and temperature.',
+                controls: `
+                    <div class="slider-container">
+                        <label>Heat Added (J):</label>
+                        <input type="range" id="heat-slider" min="-10000" max="10000" value="5000" step="100">
+                        <span id="heat-val">5000</span>
+                    </div>
+                `
+            },
+            'isobaric': {
+                title: 'Constant Pressure Process',
+                desc: 'Pressure remains constant. As heat is added, temperature increases and the gas expands, doing work. Heat added changes both internal energy and does work (Q = ΔU + W).',
+                controls: `
+                    <div class="slider-container">
+                        <label>Heat Added (J):</label>
+                        <input type="range" id="heat-slider" min="-10000" max="10000" value="5000" step="100">
+                        <span id="heat-val">5000</span>
+                    </div>
+                `
+            },
+            'isothermal': {
+                title: 'Constant Temperature Process',
+                desc: 'Temperature remains constant (ΔT = 0). For an ideal gas, internal energy depends only on temperature, so ΔU = 0. Therefore, all heat added converts into work done by the gas (Q = W). Follows Boyle\'s Law (PV = const).',
+                controls: `
+                    <div class="slider-container">
+                        <label>Volume Factor:</label>
+                        <input type="range" id="vol-slider" min="0.5" max="3" value="2" step="0.1">
+                        <span id="vol-val">2.0x</span>
+                    </div>
+                `
+            },
+            'adiabatic': {
+                title: 'Adiabatic Process',
+                desc: 'No heat is exchanged with the surroundings (Q = 0). Work is done at the expense of internal energy (W = -ΔU). Expanding gas cools down; compressing gas heats up. Follows PV^γ = const.',
+                controls: `
+                    <div class="slider-container">
+                        <label>Volume Factor:</label>
+                        <input type="range" id="vol-slider" min="0.5" max="3" value="2" step="0.1">
+                        <span id="vol-val">2.0x</span>
+                    </div>
+                `
+            },
+            'cyclic': {
+                title: 'Cyclic Process',
+                desc: 'The system undergoes a series of states and returns to its initial state. Over one complete cycle, ΔU = 0. The net work done is equal to the net heat absorbed (W_net = Q_net), represented by the area enclosed in the P-V diagram.',
+                controls: `<div class="text-sm italic text-gray-600 mb-4">A simple elliptical cycle in P-V space is shown.</div>`
+            }
+        };
+
+        function resetSimulation() {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            lastTime = 0;
+            currentTime = 0;
+            
+            document.getElementById('btn-play').textContent = 'Play';
+            document.getElementById('btn-play').classList.remove('bg-yellow-500');
+            document.getElementById('btn-play').classList.add('bg-green-500');
+            
+            // For cyclic, we calculate initial state differently in the calculate function
+            if(currentTab !== 'cyclic') {
+                 currentState = { ...initialState };
+            } else {
+                 calculateProcess(0, 0); // Sets initial cycle state
+            }
+            
+            history = { t: [0], P: [currentState.P / 1000], V: [currentState.V], T: [currentState.T], W: [0], Q: [0], dU: [0] };
+            if(currentTab === 'cyclic') {
+                history.cyclePrevV = currentState.V;
+                history.cyclePrevT = currentState.T;
+            }
+            
+            updateGraphs();
+            
+            // Adjust PV chart scales based on process to ensure it stays in view
+            pvChart.options.scales.x.min = 0;
+            pvChart.options.scales.x.max = 0.08;
+            pvChart.options.scales.y.min = 0;
+            pvChart.options.scales.y.max = 400;
+            
+            if (currentTab === 'isochoric') {
+                if (targetHeat > 0) pvChart.options.scales.y.max = 500;
+            } else if (currentTab === 'adiabatic') {
+                if (targetVolumeFactor < 1) pvChart.options.scales.y.max = 600;
+            }
+            pvChart.update();
+            
+            drawCylinder();
+        }
+
+        function setupTab(tabId) {
+            currentTab = tabId;
+            const config = processConfigs[tabId];
+            
+            processTitle.textContent = config.title;
+            processDescription.innerHTML = config.desc;
+            controlsArea.innerHTML = config.controls;
+            
+            // Attach event listeners to new controls
+            const heatSlider = document.getElementById('heat-slider');
+            if (heatSlider) {
+                heatSlider.addEventListener('input', (e) => {
+                    targetHeat = parseFloat(e.target.value);
+                    document.getElementById('heat-val').textContent = targetHeat;
+                    resetSimulation();
+                });
+                targetHeat = parseFloat(heatSlider.value);
+            }
+            
+            const volSlider = document.getElementById('vol-slider');
+            if (volSlider) {
+                volSlider.addEventListener('input', (e) => {
+                    targetVolumeFactor = parseFloat(e.target.value);
+                    document.getElementById('vol-val').textContent = targetVolumeFactor.toFixed(1) + 'x';
+                    resetSimulation();
+                });
+                targetVolumeFactor = parseFloat(volSlider.value);
+            }
+
+            resetSimulation();
+        }
+
+        // Event Listeners
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                setupTab(e.target.dataset.tab);
+            });
+        });
+
+        document.getElementById('btn-play').addEventListener('click', () => {
+            if (currentTime >= totalDuration) {
+                resetSimulation();
+            }
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('btn-play');
+            if (isPlaying) {
+                btn.textContent = 'Pause';
+                btn.classList.replace('bg-green-500', 'bg-yellow-500');
+                lastTime = performance.now();
+                animationId = requestAnimationFrame(updateLoop);
+            } else {
+                btn.textContent = 'Resume';
+                btn.classList.replace('bg-yellow-500', 'bg-green-500');
+                cancelAnimationFrame(animationId);
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', resetSimulation);
+
+        // Initial setup
+        setTimeout(() => {
+            resizeCanvas();
+            setupTab('isochoric');
+            
+            // Add a smooth render loop for particles even when paused
+            function idleRender() {
+                if (!isPlaying) {
+                    drawCylinder();
+                }
+                requestAnimationFrame(idleRender);
+            }
+            idleRender();
+        }, 100);
+
+    </script>
+</body>
+</html>
