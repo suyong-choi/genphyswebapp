@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Doppler Effect Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .panel {
+            pointer-events: auto;
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 2px;
+        }
+        /* Vertical slider specific styling */
+        input[type=range].vertical-slider {
+            writing-mode: bt-lr; /* IE */
+            -webkit-appearance: slider-vertical; /* WebKit */
+            width: 8px;
+            height: 100px;
+        }
+        .pulse-container {
+            display: flex;
+            align-items: center;
+            height: 24px;
+            overflow: hidden;
+            border-left: 2px solid #22c55e;
+            padding-left: 4px;
+            gap: 2px;
+        }
+        .pulse-mark {
+            width: 4px;
+            height: 16px;
+            background-color: #22c55e;
+            border-radius: 2px;
+            animation: slideLeft 2s linear forwards;
+        }
+        @keyframes slideLeft {
+            from { transform: translateX(200px); opacity: 1; }
+            to { transform: translateX(0px); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="text-slate-200 font-sans">
+
+    <canvas id="simCanvas"></canvas>
+
+    <div id="ui-layer" class="p-4 sm:p-6">
+        <!-- Top Stats Panel -->
+        <div class="flex justify-between items-start">
+            <div class="panel rounded-xl p-4 shadow-lg w-72">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-2">
+                    <h2 class="text-lg font-bold text-white">Metrics</h2>
+                    <div class="flex gap-2">
+                        <button id="btnPause" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded transition-colors text-white">
+                            Pause ??
+                        </button>
+                        <button id="btnSound" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded transition-colors text-white">
+                            Sound ??
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Source Mach:</span>
+                        <span id="statMach" class="font-mono text-white">0.00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Observed Freq:</span>
+                        <span id="statFreq" class="font-mono text-white">1.00x</span>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-xs text-slate-500 uppercase tracking-wider block mb-1">Detector Signal</span>
+                        <div id="pulseView" class="pulse-container bg-slate-900/50 rounded-r">
+                            <!-- Pulses will be injected here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 pt-3 border-t border-slate-700 text-xs text-slate-500 text-center">
+                    Created by Suyong Choi<br>(Korea University)
+                </div>
+            </div>
+            
+            <div class="panel rounded-xl p-4 shadow-lg text-sm max-w-xs hidden sm:block">
+                <h3 class="font-bold text-white mb-1">How it works</h3>
+                <p class="text-slate-400 mb-2">Sound waves travel at a constant speed (Mach 1.0).</p>
+                <ul class="list-disc list-inside text-slate-400 space-y-1">
+                    <li><span class="text-blue-400">Source moves right:</span> Waves bunch up ahead (higher pitch).</li>
+                    <li><span class="text-red-400">Source moves left:</span> Waves spread out behind (lower pitch).</li>
+                    <li><span class="text-amber-400">Mach ¡Ã 1:</span> Sonic boom (Mach cone) forms.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="panel rounded-xl p-5 shadow-lg w-full max-w-4xl mx-auto flex flex-col md:flex-row gap-6 items-center">
+            
+            <!-- Source Control -->
+            <div class="flex-1 w-full">
+                <div class="flex justify-between mb-2">
+                    <label class="font-medium flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                        Source Vel (Mach)
+                    </label>
+                    <span id="lblSourceVel" class="font-mono text-slate-400 text-sm">0.0</span>
+                </div>
+                <!-- Normalized scale where 1.0 is wave speed -->
+                <input type="range" id="sourceVel" min="-2.0" max="2.0" step="0.05" value="0">
+                <div class="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>-2.0</span>
+                    <span>Rest (0)</span>
+                    <span>+2.0</span>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="hidden md:block w-px h-16 bg-slate-700"></div>
+
+            <!-- Detector Control (Horizontal) -->
+            <div class="flex-1 w-full">
+                <div class="flex justify-between mb-2">
+                    <label class="font-medium flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-sm bg-green-500"></div>
+                        Detector Vel (Mach)
+                    </label>
+                    <span id="lblDetectorVel" class="font-mono text-slate-400 text-sm">0.0</span>
+                </div>
+                <!-- Normalized scale where 1.0 is wave speed -->
+                <input type="range" id="detectorVel" min="-1.5" max="1.5" step="0.05" value="0">
+                <div class="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>-1.5</span>
+                    <span>Rest (0)</span>
+                    <span>+1.5</span>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="hidden md:block w-px h-16 bg-slate-700"></div>
+
+            <div class="flex flex-col items-center justify-center pl-2">
+                <label class="font-medium text-xs text-slate-400 mb-2 text-center w-full">Det. Y<br>Offset</label>
+                <input type="range" id="detectorY" class="vertical-slider" min="-150" max="150" step="5" value="60">
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const sourceVelSlider = document.getElementById('sourceVel');
+        const detectorVelSlider = document.getElementById('detectorVel');
+        const detectorYSlider = document.getElementById('detectorY');
+        const lblSourceVel = document.getElementById('lblSourceVel');
+        const lblDetectorVel = document.getElementById('lblDetectorVel');
+        const statMach = document.getElementById('statMach');
+        const statFreq = document.getElementById('statFreq');
+        const pulseView = document.getElementById('pulseView');
+        const btnSound = document.getElementById('btnSound');
+        const btnPause = document.getElementById('btnPause');
+
+        // Physics & Render variables
+        const waveSpeed = 3; // Actual pixel speed of the wave
+        let emissionPeriod = 30; // frames between wave emissions
+        let frameCounter = 0;
+        let isPaused = false;
+        
+        // Delayed detection tracking
+        let lastHitFrame = -1;
+        let timeSinceLastHit = 0;
+        let detectedFreqRatio = 1.0;
+        let hitIntervals = []; // Array to smooth frame quantization
+        
+        // Audio API variables
+        let audioCtx = null;
+        let oscillator = null;
+        let gainNode = null;
+        let isSoundEnabled = false;
+        const BASE_FREQ = 300; // Hz
+        const AUDIO_VOLUME = 0.3; // Constant volume when active
+
+        // Entities
+        let source = { x: 0, y: 0, vMach: 0, r: 8 };
+        let detector = { x: 0, baseY: 0, yOffset: 60, vMach: 0, r: 8, flash: 0 };
+        let waves = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            source.y = canvas.height / 2;
+            detector.baseY = canvas.height / 2;
+            detector.y = detector.baseY - detector.yOffset;
+        }
+
+        function resetPositions() {
+            source.x = canvas.width * 0.3;
+            detector.x = canvas.width * 0.7;
+            waves = []; 
+            pulseView.innerHTML = '';
+            
+            lastHitFrame = -1;
+            timeSinceLastHit = 0;
+            detectedFreqRatio = 1.0;
+            hitIntervals = [];
+        }
+
+        // Pause Control
+        btnPause.addEventListener('click', () => {
+            isPaused = !isPaused;
+            if (isPaused) {
+                btnPause.textContent = "Resume ¢º?";
+                btnPause.classList.replace("bg-slate-700", "bg-amber-600");
+                btnPause.classList.replace("hover:bg-slate-600", "hover:bg-amber-500");
+                // Mute sound while paused
+                if (gainNode) gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+            } else {
+                btnPause.textContent = "Pause ??";
+                btnPause.classList.replace("bg-amber-600", "bg-slate-700");
+                btnPause.classList.replace("hover:bg-amber-500", "hover:bg-slate-600");
+                // Resume sound if it was active
+                if (isSoundEnabled && detectedFreqRatio > 0 && gainNode) {
+                     gainNode.gain.setTargetAtTime(AUDIO_VOLUME, audioCtx.currentTime, 0.05);
+                }
+            }
+        });
+
+        // Web Audio Setup
+        btnSound.addEventListener('click', () => {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                
+                oscillator = audioCtx.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.value = BASE_FREQ;
+                
+                gainNode = audioCtx.createGain();
+                gainNode.gain.value = 0; // Start muted
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.start();
+                
+                isSoundEnabled = true;
+                btnSound.textContent = "Sound ??";
+                btnSound.classList.replace("bg-slate-700", "bg-blue-600");
+                btnSound.classList.replace("hover:bg-slate-600", "hover:bg-blue-500");
+            } else {
+                if (audioCtx.state === 'running') {
+                    audioCtx.suspend();
+                    isSoundEnabled = false;
+                    btnSound.textContent = "Sound ??";
+                    btnSound.classList.replace("bg-blue-600", "bg-slate-700");
+                    btnSound.classList.replace("hover:bg-blue-500", "hover:bg-slate-600");
+                } else {
+                    audioCtx.resume();
+                    isSoundEnabled = true;
+                    btnSound.textContent = "Sound ??";
+                    btnSound.classList.replace("bg-slate-700", "bg-blue-600");
+                    btnSound.classList.replace("hover:bg-slate-600", "hover:bg-blue-500");
+                }
+            }
+        });
+
+        sourceVelSlider.addEventListener('input', (e) => {
+            source.vMach = parseFloat(e.target.value);
+            lblSourceVel.textContent = source.vMach.toFixed(2);
+        });
+
+        detectorVelSlider.addEventListener('input', (e) => {
+            detector.vMach = parseFloat(e.target.value);
+            lblDetectorVel.textContent = detector.vMach.toFixed(2);
+        });
+
+        detectorYSlider.addEventListener('input', (e) => {
+            detector.yOffset = parseFloat(e.target.value);
+            detector.y = detector.baseY - detector.yOffset;
+            // Force a re-render of the detector position even if paused
+            if (isPaused) draw();
+        });
+
+        window.addEventListener('resize', resize);
+
+        function emitWave() {
+            waves.push({
+                x: source.x,
+                y: source.y,
+                r: source.r,
+                hitDetector: false // Track if this specific wave has struck the detector yet
+            });
+        }
+
+        function registerDetectorHit() {
+            detector.flash = 1.0;
+
+            // Calculate frequency based on actual time between wave hits
+            if (lastHitFrame !== -1) {
+                let interval = frameCounter - lastHitFrame; 
+                if (interval > 0) {
+                    hitIntervals.push(interval);
+                    // Keep last 3 intervals to smooth out frame quantization noise
+                    if (hitIntervals.length > 3) hitIntervals.shift(); 
+                    
+                    let avgInterval = hitIntervals.reduce((a, b) => a + b, 0) / hitIntervals.length;
+                    detectedFreqRatio = emissionPeriod / avgInterval;
+                    detectedFreqRatio = Math.min(detectedFreqRatio, 10); // Cap extreme spikes
+                    
+                    // Update audio pitch ONLY when a wave actually arrives at the detector
+                    if (isSoundEnabled && audioCtx && !isPaused) {
+                        let targetFreq = BASE_FREQ * detectedFreqRatio;
+                        targetFreq = Math.max(50, Math.min(targetFreq, 3000));
+                        // Fast transition so pitch shifts strictly upon wave hit
+                        oscillator.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.02);
+                        
+                        // Ensure volume is on (constant volume, no distance attenuation)
+                        gainNode.gain.setTargetAtTime(AUDIO_VOLUME, audioCtx.currentTime, 0.05);
+                    }
+                }
+            }
+            
+            lastHitFrame = frameCounter;
+            timeSinceLastHit = 0;
+
+            // Visual pulse
+            const pulse = document.createElement('div');
+            pulse.className = 'pulse-mark';
+            pulseView.appendChild(pulse);
+            setTimeout(() => {
+                if (pulse.parentNode) pulse.parentNode.removeChild(pulse);
+            }, 2000);
+        }
+
+        function updatePhysics() {
+            // Calculate actual pixel velocities based on Mach number
+            let actualSourceVx = source.vMach * waveSpeed;
+            let actualDetectorVx = detector.vMach * waveSpeed;
+
+            // Move entities
+            source.x += actualSourceVx;
+            detector.x += actualDetectorVx;
+
+            // Screen wrapping for infinite simulation
+            let wrappedSource = false;
+            if (source.x > canvas.width + 100) { source.x = -100; wrappedSource = true; }
+            if (source.x < -100) { source.x = canvas.width + 100; wrappedSource = true; }
+            
+            if (detector.x > canvas.width + 100) detector.x = -100;
+            if (detector.x < -100) detector.x = canvas.width + 100;
+
+            if (wrappedSource) waves = []; // Clear waves to avoid visual bugs across screen wrap
+
+            timeSinceLastHit++; 
+            frameCounter++;
+
+            // Emit waves
+            if (frameCounter % emissionPeriod === 0) {
+                emitWave();
+            }
+
+            // Update waves and check collisions
+            for (let i = waves.length - 1; i >= 0; i--) {
+                let wave = waves[i];
+                wave.r += waveSpeed;
+
+                // Check intersection with detector
+                if (!wave.hitDetector) {
+                    let dx = wave.x - detector.x;
+                    let dy = wave.y - detector.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    // If the wave radius catches up to the distance to detector
+                    if (Math.abs(dist - wave.r) < (waveSpeed / 2 + detector.r)) {
+                        wave.hitDetector = true;
+                        registerDetectorHit();
+                    }
+                }
+
+                // Remove waves that are too big
+                if (wave.r > Math.max(canvas.width, canvas.height) * 1.5) {
+                    waves.splice(i, 1);
+                }
+            }
+
+            updateStats();
+        }
+
+        function updateStats() {
+            let mach = Math.abs(source.vMach);
+            statMach.textContent = mach.toFixed(2);
+            
+            // Mach visual alert
+            if (mach >= 1.0) {
+                statMach.classList.add('text-red-400');
+                statMach.classList.remove('text-white');
+            } else {
+                statMach.classList.remove('text-red-400');
+                statMach.classList.add('text-white');
+            }
+
+            let displayRatio = detectedFreqRatio;
+            
+            // Timeout if no waves arrive
+            let timeoutFrames = Math.max(emissionPeriod * 4, 150);
+            if (timeSinceLastHit > timeoutFrames) {
+                displayRatio = 0; // Signal lost
+            }
+
+            // Update UI Stats Text
+            if (displayRatio === 0) {
+                 statFreq.textContent = "No Signal";
+                 statFreq.className = "text-right font-mono text-slate-500";
+            } else if (displayRatio > 5) {
+                 statFreq.textContent = "¡Ä (Boom)";
+                 statFreq.className = "text-right font-mono text-amber-400 font-bold";
+            } else {
+                 statFreq.textContent = displayRatio.toFixed(2) + "x";
+                 if (displayRatio > 1.05) {
+                     statFreq.className = "text-right font-mono text-blue-400"; // Blueshift
+                 } else if (displayRatio < 0.95) {
+                     statFreq.className = "text-right font-mono text-red-400"; // Redshift
+                 } else {
+                     statFreq.className = "text-right font-mono text-white";
+                 }
+            }
+
+            // Manage Audio Volume (Constant volume when signal is present)
+            if (isSoundEnabled && audioCtx && !isPaused) {
+                if (displayRatio > 0 && displayRatio <= 5) {
+                    // Constant volume, no attenuation based on distance
+                    gainNode.gain.setTargetAtTime(AUDIO_VOLUME, audioCtx.currentTime, 0.1);
+                } else {
+                    // Mute if signal lost
+                    gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.2);
+                }
+            }
+        }
+
+        function draw() {
+            // Clear screen with trail effect
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.4)'; // slate-900 with alpha
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw center axis lines for reference
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, source.y); ctx.lineTo(canvas.width, source.y);
+            // Draw a faint line for the detector's base axis (if offset)
+            if (Math.abs(detector.yOffset) > 1) {
+                 ctx.moveTo(0, detector.baseY); ctx.lineTo(canvas.width, detector.baseY);
+            }
+            // Draw line for detector's actual path
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(0, detector.y); ctx.lineTo(canvas.width, detector.y);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+
+            // Draw Waves
+            ctx.lineWidth = 1.5;
+            waves.forEach(wave => {
+                let opacity = Math.max(0, 1 - (wave.r / (canvas.width * 0.8)));
+                ctx.strokeStyle = `rgba(148, 163, 184, ${opacity})`; // slate-400
+                
+                ctx.beginPath();
+                ctx.arc(wave.x, wave.y, wave.r, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Draw Detector
+            ctx.beginPath();
+            ctx.arc(detector.x, detector.y, detector.r, 0, Math.PI * 2);
+            ctx.fillStyle = detector.flash > 0 ? '#4ade80' : '#22c55e'; // flash lighter green
+            ctx.fill();
+            ctx.strokeStyle = '#14532d';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw Detector Label
+            ctx.fillStyle = '#4ade80';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Detector', detector.x, detector.y + 20);
+
+            // Fade detector flash
+            if (detector.flash > 0 && !isPaused) detector.flash -= 0.05;
+
+            // Draw Source
+            ctx.beginPath();
+            ctx.arc(source.x, source.y, source.r, 0, Math.PI * 2);
+            ctx.fillStyle = '#3b82f6'; // blue-500
+            ctx.fill();
+            ctx.strokeStyle = '#1e3a8a';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw Source Label
+            ctx.fillStyle = '#60a5fa';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Source', source.x, source.y + 20);
+
+            // Draw velocity vectors (scaled for display purposes)
+            function drawVector(x, y, vMach, color) {
+                if (Math.abs(vMach) < 0.05) return;
+                let displayLength = vMach * 30; // arbitrary scale for the arrow length
+                
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + displayLength, y);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Arrowhead
+                ctx.beginPath();
+                let arrowX = x + displayLength;
+                let dir = Math.sign(vMach);
+                ctx.moveTo(arrowX, y);
+                ctx.lineTo(arrowX - dir * 5, y - 4);
+                ctx.lineTo(arrowX - dir * 5, y + 4);
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+
+            drawVector(source.x, source.y, source.vMach, '#60a5fa');
+            drawVector(detector.x, detector.y, detector.vMach, '#4ade80');
+        }
+
+        function animate() {
+            if (!isPaused) {
+                updatePhysics();
+            }
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize
+        resize();
+        resetPositions();
+        
+        // Ensure sliders match initial code state
+        sourceVelSlider.value = 0;
+        detectorVelSlider.value = 0;
+        detectorYSlider.value = 60;
+        
+        animate();
+
+    </script>
+</body>
+</html>
